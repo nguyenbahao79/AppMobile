@@ -17,6 +17,7 @@ export const apiClient = {
   },
 
   async post(endpoint: string, data: any, headers = {}) {
+    console.log(`[API Request] POST ${BASE_URL}${endpoint}:`, JSON.stringify(data, null, 2));
     const response = await fetch(`${BASE_URL}${endpoint}`, {
       method: 'POST',
       headers: {
@@ -52,10 +53,20 @@ export const apiClient = {
   },
 
   async handleResponse(response: Response) {
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.message || 'Có lỗi xảy ra khi gọi API');
+    const text = await response.text(); // Lấy text thô để tránh lỗi nếu không phải JSON
+    console.log(`[API Response] ${response.status} ${response.url}:`, text);
+    
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch (e) {
+      throw new Error(`Server không trả về JSON: ${text.substring(0, 100)}`);
     }
-    return data;
+
+    if (!response.ok) {
+      throw new Error(json.message || `Lỗi hệ thống (${response.status})`);
+    }
+    
+    return json.data !== undefined ? json.data : json;
   },
 };

@@ -7,6 +7,9 @@ import { AuthInput } from '@/features/auth/AuthInput';
 import { AuthButton } from '@/features/auth/AuthButton';
 import { useThemeColor } from '@/hooks/use-theme-color';
 
+import { authService } from '@/services/authService';
+import { Alert } from 'react-native';
+
 export default function RegisterScreen() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -16,13 +19,38 @@ export default function RegisterScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const tintColor = useThemeColor({}, 'tint');
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
+    if (!fullName || !email || !phone || !password) {
+      Alert.alert('Thông báo', 'Vui lòng điền đầy đủ thông tin.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      Alert.alert('Lỗi', 'Mật khẩu xác nhận không khớp.');
+      return;
+    }
+
     setIsLoading(true);
-    // Giả lập đăng ký thành công sau 1.5 giây
-    setTimeout(() => {
+    try {
+      // DTO khớp với UserRequest trong Spring Boot của bạn
+      const userData = {
+        fullName,
+        email,
+        phone,
+        password,
+        role: 'user' // Mặc định là khách hàng
+      };
+
+      await authService.register(userData);
+      
+      Alert.alert('Thành công', 'Đăng ký tài khoản thành công! Vui lòng đăng nhập.', [
+        { text: 'Đăng nhập', onPress: () => router.replace('/(auth)/login') }
+      ]);
+    } catch (error: any) {
+      Alert.alert('Đăng ký thất bại', error.message || 'Có lỗi xảy ra, vui lòng thử lại sau.');
+    } finally {
       setIsLoading(false);
-      router.replace('/(auth)/login');
-    }, 1500);
+    }
   };
 
   return (

@@ -19,9 +19,9 @@ export function MovieCard({ movie, width = '31%' }: MovieCardProps) {
     <Link href={`/user/movie/${movie.id}` as Href} asChild>
       <Pressable style={[styles.card, { width }]}>
         <View style={styles.imageContainer}>
-          <Image 
-            source={movie.poster} 
-            style={styles.image} 
+          <Image
+            source={movie.posterUrl || movie.poster}
+            style={styles.image}
             contentFit="cover" // Để ảnh lấp đầy khung mà không có khoảng trống
             transition={300}
             cachePolicy="memory-disk"
@@ -30,8 +30,8 @@ export function MovieCard({ movie, width = '31%' }: MovieCardProps) {
         <View style={styles.info}>
           <Text style={[styles.title, { color: theme.text }]} numberOfLines={1}>{movie.title}</Text>
           <View style={styles.ratingRow}>
-            <Text style={styles.rating}>⭐ {movie.rating}</Text>
-            <Text style={[styles.duration, { color: theme.tabIconDefault }]}>{movie.duration.split(' ')[0]}m</Text>
+            <Text style={styles.rating}>⭐ {movie.rating || 5.0}</Text>
+            <Text style={[styles.duration, { color: theme.tabIconDefault }]}>{movie.duration}m</Text>
           </View>
         </View>
       </Pressable>

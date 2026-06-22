@@ -15,7 +15,7 @@ export function FeaturedMovie({ movie }: FeaturedMovieProps) {
     <Link href={`/user/movie/${movie.id}` as Href} asChild>
       <Pressable style={styles.container}>
         <Image 
-          source={movie.backdrop} 
+          source={movie.banner || movie.posterUrl || movie.backdrop} 
           style={styles.image} 
           contentFit="cover"
           transition={500}

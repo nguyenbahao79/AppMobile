@@ -9,7 +9,7 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { MOVIES, Movie } from '@/mocks/movies';
-import { movieService } from '@/api/movieService';
+import { movieService } from '@/services/movieService';
 import { MovieCard } from '@/components/features/user/movie-card';
 import { FeaturedMovie } from '@/components/features/user/featured-movie';
 import { PromoSlider } from '@/components/features/user/promo-slider';
@@ -28,14 +28,15 @@ export default function HomeScreen() {
 
   useEffect(() => {
     const fetchMovies = async () => {
+      setLoading(true);
       try {
-        const data = await movieService.getMovies();
-        if (data && data.length > 0) {
+        const data = await movieService.getAllMovies();
+        if (data && Array.isArray(data)) {
           setMovies(data);
         }
       } catch (error) {
-        console.warn('Backend not available, using mock data:', error);
-        // Fallback to MOVIES which is already set in initial state
+        console.warn('Backend connection failed, showing mock data:', error);
+        // Giữ lại MOVIES mock làm fallback
       } finally {
         setLoading(false);
       }
@@ -46,9 +47,10 @@ export default function HomeScreen() {
 
   const numColumns = width > 600 ? 4 : 3;
 
-  const hotMovies = movies.filter(m => m.isHot);
-  const nowPlaying = movies.filter(m => m.isNowPlaying);
-  const upcoming = movies.filter(m => !m.isNowPlaying);
+  // Cập nhật logic lọc phim dựa trên dữ liệu Backend (Dùng ID hoặc Status)
+  const hotMovies = movies.slice(0, 3); // Giả sử 3 phim đầu là Hot
+  const nowPlaying = movies.filter(m => m.status === 1); 
+  const upcoming = movies.filter(m => m.status !== 1);
 
   const filteredMovies = movies.filter(m => 
     m.title.toLowerCase().includes(search.toLowerCase())
@@ -57,8 +59,6 @@ export default function HomeScreen() {
   const renderHeader = () => (
     <View>
       <PromoSlider />
-
-      {/* Hot Movies Section */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>🔥 Hot Movies</Text>
@@ -75,8 +75,6 @@ export default function HomeScreen() {
           decelerationRate="fast"
         />
       </View>
-
-      {/* Now Playing Section */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Now Playing</Text>
@@ -96,8 +94,6 @@ export default function HomeScreen() {
           ItemSeparatorComponent={() => <View style={{ width: 10 }} />}
         />
       </View>
-
-      {/* Upcoming Section Header */}
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: theme.text }]}>Upcoming</Text>
         <Text style={[styles.seeAll, { color: theme.tint }]}>See All</Text>

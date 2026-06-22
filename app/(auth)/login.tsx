@@ -24,15 +24,32 @@ export default function LoginScreen() {
 
     setIsLoading(true);
     try {
-      const response = await authService.login({ email, password });
+      // Dựa trên code Java: "Staff đăng nhập bằng email gửi vào trường username"
+      // Tôi sẽ chỉ gửi 'username' và 'password' là cấu chuẩn của Spring Security
+      const response = await authService.login({ 
+        username: email, // Đây chính là Gmail bạn nhập
+        password: password 
+      });
       
-      // Giả sử Backend trả về: { success: true, user: {...}, token: '...' }
-      // Lưu Token vào LocalStorage hoặc Context nếu cần thiết
-      console.log('Login success:', response);
+      console.log('--- LOGIN SUCCESS ---');
+      console.log('Response Data:', JSON.stringify(response, null, 2));
       
-      router.replace('/user/(tabs)');
+      // Theo code Java: Trả về 'user' (khách) hoặc 'staff' (nhân viên)
+      if (response.staff) {
+        // Nếu có object staff -> Đây là nhân viên
+        Alert.alert('Thành công', `Chào mừng nhân viên: ${response.staff.fullName || 'Staff'}`);
+        router.replace('/staff');
+      } else if (response.user) {
+        // Nếu có object user -> Đây là khách hàng
+        router.replace('/user/(tabs)');
+      } else {
+        // Trường hợp dự phòng nếu không thấy cả hai
+        router.replace('/user/(tabs)');
+      }
+      
     } catch (error: any) {
-      Alert.alert('Đăng nhập thất bại', error.message || 'Email hoặc mật khẩu không chính xác.');
+      console.error('Login Error:', error);
+      Alert.alert('Đăng nhập thất bại', error.message || 'Tài khoản hoặc mật khẩu không chính xác.');
     } finally {
       setIsLoading(false);
     }

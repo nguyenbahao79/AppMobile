@@ -9,56 +9,50 @@ import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { IconSymbol } from '@/components/base/icon-symbol';
 
+import { apiClient } from '@/api/client';
+import { API_ENDPOINTS } from '@/api/config';
+
 export default function QRScannerScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
-  const [ticketData, setTicketData] = useState<ScannedTicket | null>(null);
+  const [ticketData, setTicketData] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const router = useRouter();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
 
-  if (!permission) {
-    return <View style={styles.container} />;
-  }
-
-  if (!permission.granted) {
-    return (
-      <View style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={[styles.message, { color: theme.text }]}>We need your permission to show the camera</Text>
-        <Pressable 
-          style={[styles.permissionButton, { backgroundColor: theme.tint }]}
-          onPress={requestPermission}
-        >
-          <Text style={styles.permissionButtonText}>Grant Permission</Text>
-        </Pressable>
-        <Pressable onPress={() => router.back()} style={{ marginTop: 20 }}>
-          <Text style={{ color: theme.tabIconDefault }}>Go Back</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  const handleBarcodeScanned = ({ data }: { data: string }) => {
+  const handleBarcodeScanned = async ({ data }: { data: string }) => {
     if (scanned) return;
     setScanned(true);
     
-    // Check mock data
-    const ticket = TICKETS_MOCK[data];
-    if (ticket) {
-      setTicketData(ticket);
-      setModalVisible(true);
-    } else {
-      Alert.alert('Invalid QR Code', `No ticket found for ID: ${data}`, [
-        { text: 'Scan Again', onPress: () => setScanned(false) }
+    try {
+      // Gọi API lấy thông tin vé từ mã QR
+      const response = await apiClient.get(`${API_ENDPOINTS.TICKET_DETAIL(data)}`);
+      if (response) {
+        setTicketData(response);
+        setModalVisible(true);
+      }
+    } catch (error: any) {
+      Alert.alert('Lỗi mã QR', error.message || 'Không tìm thấy thông tin vé này.', [
+        { text: 'Quét lại', onPress: () => setScanned(false) }
       ]);
     }
   };
 
-  const verifyTicket = () => {
-    Alert.alert('Success', 'Ticket verified and marked as used.');
-    setModalVisible(false);
-    setScanned(false);
+  const verifyTicket = async () => {
+    if (!ticketData) return;
+    setIsVerifying(true);
+    try {
+      await apiClient.post(API_ENDPOINTS.VERIFY_TICKET, { ticketId: ticketData.id });
+      Alert.alert('Thành công', 'Vé đã được xác nhận và đánh dấu là đã sử dụng.');
+      setModalVisible(false);
+      setScanned(false);
+    } catch (error: any) {
+      Alert.alert('Lỗi xác thực', error.message || 'Không thể xác thực vé này.');
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   // For simulation in case camera is not accessible
