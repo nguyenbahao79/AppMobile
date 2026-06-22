@@ -7,15 +7,23 @@ import { ThemedText } from '@/components/base/themed-text';
 import { ThemedView } from '@/components/base/themed-view';
 import { IconSymbol } from '@/components/base/icon-symbol';
 import { useTickets, Ticket } from '@/context/TicketContext';
+import { RefreshControl } from 'react-native';
 
 export default function TicketsScreen() {
-  const { tickets, cancelTicket } = useTickets();
+  const { tickets, cancelTicket, fetchTickets, loading } = useTickets();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
 
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchTickets();
+    setRefreshing(false);
+  };
 
   const handleTicketPress = (ticket: Ticket) => {
     setSelectedTicket(ticket);
@@ -63,11 +71,14 @@ export default function TicketsScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <AppHeader title="Vé của tôi" showNotification={false} />
       
-      {tickets.length === 0 ? (
+      {tickets.length === 0 && !loading ? (
         <View style={styles.emptyContainer}>
           <IconSymbol name="ticket" size={80} color={theme.tabIconDefault + '40'} />
           <ThemedText style={styles.emptyText}>Bạn chưa có vé nào</ThemedText>
           <ThemedText style={styles.emptySubText}>Hãy chọn phim và đặt vé ngay nhé!</ThemedText>
+          <Pressable onPress={onRefresh} style={{ marginTop: 20 }}>
+            <ThemedText style={{ color: theme.tint }}>Tải lại</ThemedText>
+          </Pressable>
         </View>
       ) : (
         <FlatList
@@ -76,6 +87,9 @@ export default function TicketsScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />
+          }
         />
       )}
 

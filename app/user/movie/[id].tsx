@@ -1,8 +1,9 @@
-import React from 'react';
-import { View, StyleSheet, ScrollView, Pressable, SafeAreaView, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, ScrollView, Pressable, SafeAreaView, Platform, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter, Stack, Href } from 'expo-router';
-import { MOVIES } from '@/mocks/movies';
+import { MOVIES, Movie } from '@/mocks/movies';
+import { movieService } from '@/services/movieService';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { IconSymbol } from '@/components/base/icon-symbol';
@@ -12,10 +13,39 @@ import { ThemedView } from '@/components/base/themed-view';
 export default function MovieDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
-  const movie = MOVIES.find((m) => m.id === id);
+  const [movie, setMovie] = useState<Movie | null>(null);
+  const [loading, setLoading] = useState(true);
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
+
+  useEffect(() => {
+    const fetchMovieDetail = async () => {
+      if (!id) return;
+      try {
+        const data = await movieService.getMovieDetail(id as string);
+        if (data) {
+          setMovie(data);
+        }
+      } catch (error) {
+        console.warn('Backend not available, using mock data for detail:', error);
+        const mockMovie = MOVIES.find((m) => m.id === id);
+        if (mockMovie) setMovie(mockMovie);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMovieDetail();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <ThemedView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={theme.tint} />
+      </ThemedView>
+    );
+  }
 
   if (!movie) {
     return (
@@ -30,7 +60,7 @@ export default function MovieDetailScreen() {
       <Stack.Screen options={{ title: movie.title, headerBackTitle: 'Quay lại' }} />
       <ScrollView showsVerticalScrollIndicator={false}>
         <Image 
-          source={movie.poster} 
+          source={movie.posterUrl || movie.poster} 
           style={styles.image} 
           contentFit="cover"
           transition={500}
@@ -40,12 +70,12 @@ export default function MovieDetailScreen() {
           <View style={styles.metaRow}>
             <ThemedText style={styles.genre}>{movie.genre}</ThemedText>
             <ThemedText style={styles.dot}>•</ThemedText>
-            <ThemedText style={styles.duration}>{movie.duration}</ThemedText>
+            <ThemedText style={styles.duration}>{movie.duration} phút</ThemedText>
           </View>
           
           <View style={styles.ratingRow}>
             <IconSymbol name="star.fill" size={20} color="#FFD700" />
-            <ThemedText style={styles.rating}>{movie.rating} / 5.0</ThemedText>
+            <ThemedText style={styles.rating}>{movie.rating || 5.0} / 5.0</ThemedText>
           </View>
 
           <ThemedText type="subtitle" style={styles.sectionTitle}>Mô tả phim</ThemedText>

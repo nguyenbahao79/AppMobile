@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, StyleSheet, Pressable, ScrollView, SafeAreaView, Alert, Platform, Image } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack, Href } from 'expo-router';
 import { MOVIES } from '@/mocks/movies';
@@ -41,14 +41,34 @@ const SOLD_SEATS = ['A3', 'B5', 'D4', 'E2', 'F7', 'H2'];
 const DATES = ['20 Th10', '21 Th10', '22 Th10', '23 Th10', '24 Th10'];
 const TIMES = ['10:00', '13:30', '16:45', '19:30', '21:00'];
 
+import { movieService } from '@/services/movieService';
+import { Movie } from '@/mocks/movies';
+
 export default function BookingScreen() {
   const { id } = useLocalSearchParams();
-  const movie = MOVIES.find((m) => m.id === id);
+  const [movie, setMovie] = useState<Movie | null>(null);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
   const { addTicket } = useTickets();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
+
+  useEffect(() => {
+    const fetchMovie = async () => {
+      if (!id) return;
+      try {
+        const data = await movieService.getMovieDetail(id as string);
+        if (data) setMovie(data);
+      } catch (error) {
+        console.warn('Using mock movie for booking:', error);
+        setMovie(MOVIES.find(m => m.id === id) || null);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchMovie();
+  }, [id]);
 
   const [step, setStep] = useState(1); // 1: Showtime, 2: Seats, 3: Products, 4: Payment
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);

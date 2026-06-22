@@ -10,6 +10,13 @@ export const movieService = {
   },
 
   /**
+   * Alias cho getAllMovies để tương thích
+   */
+  async getMovies() {
+    return await this.getAllMovies();
+  },
+
+  /**
    * Lấy danh sách phim Hot (Featured)
    */
   async getHotMovies() {
