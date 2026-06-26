@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, View, Image } from 'react-native';
+import { StyleSheet, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, View, Image , Alert } from 'react-native';
 import { Link, router } from 'expo-router';
 import { ThemedView } from '@/components/base/themed-view';
 import { ThemedText } from '@/components/base/themed-text';
@@ -8,25 +8,47 @@ import { AuthButton } from '@/features/auth/AuthButton';
 import { useThemeColor } from '@/hooks/use-theme-color';
 
 import { authService } from '@/services/authService';
-import { Alert } from 'react-native';
+
 
 export default function RegisterScreen() {
+  const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [birthday, setBirthday] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const tintColor = useThemeColor({}, 'tint');
 
   const handleRegister = async () => {
-    if (!fullName || !email || !phone || !password) {
+    const cleanUsername = username.trim();
+    const cleanFullName = fullName.trim();
+    const cleanEmail = email.trim();
+    const cleanPhone = phone.replace(/\s/g, '');
+    const cleanBirthday = birthday.trim();
+
+    if (!cleanUsername || !cleanFullName || !cleanEmail || !cleanPhone || !cleanBirthday || !password.trim()) {
       Alert.alert('Thông báo', 'Vui lòng điền đầy đủ thông tin.');
       return;
     }
 
-    if (password !== confirmPassword) {
-      Alert.alert('Lỗi', 'Mật khẩu xác nhận không khớp.');
+    if (cleanUsername.length < 6 || cleanUsername.length > 50) {
+      Alert.alert('Lỗi', 'Tên đăng nhập phải từ 6 đến 50 ký tự.');
+      return;
+    }
+
+    if (!/^[a-z0-9._%+-]+@gmail\.com$/i.test(cleanEmail)) {
+      Alert.alert('Lỗi', 'Email phải đúng định dạng Gmail (vd: abc@gmail.com).');
+      return;
+    }
+
+    if (!/^[0-9]{10}$/.test(cleanPhone)) {
+      Alert.alert('Lỗi', 'Số điện thoại phải có 10 chữ số.');
+      return;
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanBirthday)) {
+      Alert.alert('Lỗi', 'Ngày sinh phải theo định dạng YYYY-MM-DD, ví dụ 2004-04-22.');
       return;
     }
 
@@ -34,11 +56,13 @@ export default function RegisterScreen() {
     try {
       // DTO khớp với UserRequest trong Spring Boot của bạn
       const userData = {
-        fullName,
-        email,
-        phone,
-        password,
-        role: 'user' // Mặc định là khách hàng
+        username: cleanUsername,
+        password: password.trim(),
+        fullname: cleanFullName,
+        email: cleanEmail,
+        phone: cleanPhone,
+        birthday: cleanBirthday,
+        avatar: null,
       };
 
       await authService.register(userData);
@@ -71,40 +95,47 @@ export default function RegisterScreen() {
           </View>
 
           <View style={styles.form}>
-            <AuthInput
-              label="Họ và tên"
+          <AuthInput
+            label="Tên đăng nhập *"
+            placeholder="Nhập tên đăng nhập"
+            value={username}
+            onChangeText={setUsername}
+            autoCapitalize="none"
+          />
+          <AuthInput
+            label="Mật khẩu *"
+            placeholder="••••••"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+          />
+          <AuthInput
+            label="Họ và tên *"
               placeholder="Nhập họ và tên"
               value={fullName}
               onChangeText={setFullName}
             />
             <AuthInput
-              label="Email"
-              placeholder="Nhập email của bạn"
+              label="Email *"
+              placeholder="example@gmail.com"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
             />
             <AuthInput
-              label="Số điện thoại"
-              placeholder="Nhập số điện thoại"
+              label="Số điện thoại *"
+              placeholder="09xxxxxxxx"
               value={phone}
               onChangeText={setPhone}
               keyboardType="phone-pad"
             />
             <AuthInput
-              label="Mật khẩu"
-              placeholder="Tạo mật khẩu"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
-            <AuthInput
-              label="Xác nhận mật khẩu"
-              placeholder="Nhập lại mật khẩu"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry
+              label="Ngày sinh *"
+              placeholder="YYYY-MM-DD"
+              value={birthday}
+              onChangeText={setBirthday}
+              keyboardType="numbers-and-punctuation"
             />
 
             <AuthButton

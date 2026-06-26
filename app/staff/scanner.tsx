@@ -3,8 +3,6 @@ import { StyleSheet, Text, View, Pressable, Modal, ScrollView, Alert } from 'rea
 // Note: expo-camera needs to be installed via npx expo install expo-camera
 // If not installed, this code will show a placeholder UI
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useRouter } from 'expo-router';
-import { TICKETS_MOCK, ScannedTicket } from '@/mocks/tickets';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { IconSymbol } from '@/components/base/icon-symbol';
@@ -12,29 +10,86 @@ import { IconSymbol } from '@/components/base/icon-symbol';
 import { apiClient } from '@/api/client';
 import { API_ENDPOINTS } from '@/api/config';
 
+type ScannedOrder = {
+  orderCode: string;
+  customerName?: string;
+  status?: number;
+  finalAmount?: number;
+  paymentMethod?: string;
+  tickets?: {
+    movieTitle?: string;
+    showtime?: string;
+    roomName?: string;
+    seatNumber?: string;
+    seatTypeName?: string;
+    price?: number;
+  }[];
+  foods?: {
+    productName?: string;
+    quantity?: number;
+    price?: number;
+  }[];
+};
+
 export default function QRScannerScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
-  const [ticketData, setTicketData] = useState<any>(null);
+  const [ticketData, setTicketData] = useState<ScannedOrder | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
-  const router = useRouter();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
+
+  if (!permission) {
+    return <View style={[styles.container, { backgroundColor: theme.background }]} />;
+  }
+
+  if (!permission.granted) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', padding: 24 }]}>
+        <Text style={[styles.message, { color: theme.text }]}>Ứng dụng cần quyền camera để quét mã QR.</Text>
+        <Pressable style={[styles.permissionButton, { backgroundColor: theme.tint }]} onPress={requestPermission}>
+          <Text style={styles.permissionButtonText}>Cho phép camera</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   const handleBarcodeScanned = async ({ data }: { data: string }) => {
     if (scanned) return;
     setScanned(true);
     
     try {
-      // Gọi API lấy thông tin vé từ mã QR
-      const response = await apiClient.get(`${API_ENDPOINTS.TICKET_DETAIL(data)}`);
+      const response = await apiClient.post(API_ENDPOINTS.VERIFY_TICKET, { qrToken: data.trim() });
       if (response) {
-        setTicketData(response);
+        const verified = response as {
+          orderCode?: string;
+          ticketCode?: string;
+          customerName?: string;
+          status?: number;
+          movieTitle?: string;
+          showtime?: string;
+          roomName?: string;
+          seatNumber?: string;
+        };
+        setTicketData({
+          orderCode: verified.orderCode || verified.ticketCode || '—',
+          customerName: verified.customerName,
+          status: verified.status,
+          tickets: [{
+            movieTitle: verified.movieTitle,
+            showtime: verified.showtime,
+            roomName: verified.roomName,
+            seatNumber: verified.seatNumber,
+          }],
+        });
         setModalVisible(true);
       }
     } catch (error: any) {
-      Alert.alert('Lỗi mã QR', error.message || 'Không tìm thấy thông tin vé này.', [
+      const message = error.message || 'Không tìm thấy thông tin vé này.';
+      const isAuthError = /chưa đăng nhập|token|quyền truy cập|unauthor/i.test(message);
+      Alert.alert(isAuthError ? 'Phiên nhân viên không hợp lệ' : 'Lỗi mã QR',
+        isAuthError ? 'Vui lòng đăng xuất và đăng nhập lại bằng chế độ Nhân viên trước khi quét QR.' : message, [
         { text: 'Quét lại', onPress: () => setScanned(false) }
       ]);
     }
@@ -43,21 +98,12 @@ export default function QRScannerScreen() {
   const verifyTicket = async () => {
     if (!ticketData) return;
     setIsVerifying(true);
-    try {
-      await apiClient.post(API_ENDPOINTS.VERIFY_TICKET, { ticketId: ticketData.id });
-      Alert.alert('Thành công', 'Vé đã được xác nhận và đánh dấu là đã sử dụng.');
-      setModalVisible(false);
-      setScanned(false);
-    } catch (error: any) {
-      Alert.alert('Lỗi xác thực', error.message || 'Không thể xác thực vé này.');
-    } finally {
-      setIsVerifying(false);
-    }
-  };
-
-  // For simulation in case camera is not accessible
-  const simulateScan = (id: string) => {
-    handleBarcodeScanned({ data: id });
+    Alert.alert(
+      'Đã kiểm tra thông tin',
+      'BE hiện chưa có API lưu trạng thái đã soát vé, nên app chỉ xác nhận hiển thị thông tin đơn.',
+      [{ text: 'Quét tiếp', onPress: () => { setModalVisible(false); setScanned(false); } }]
+    );
+    setIsVerifying(false);
   };
 
   return (
@@ -82,16 +128,7 @@ export default function QRScannerScreen() {
             <View style={styles.unfocusedContainer} />
           </View>
           <View style={styles.unfocusedContainer}>
-            <Text style={styles.scanText}>Center the QR code in the box</Text>
-            
-            <View style={styles.simulationButtons}>
-               <Pressable style={styles.simButton} onPress={() => simulateScan('TICKET_123')}>
-                 <Text style={styles.simButtonText}>Test Valid Ticket</Text>
-               </Pressable>
-               <Pressable style={styles.simButton} onPress={() => simulateScan('TICKET_456')}>
-                 <Text style={styles.simButtonText}>Test Used Ticket</Text>
-               </Pressable>
-            </View>
+            <Text style={styles.scanText}>Đưa mã QR đơn vé vào khung quét</Text>
           </View>
         </View>
       </CameraView>
@@ -105,7 +142,7 @@ export default function QRScannerScreen() {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: theme.background }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>Ticket Verification</Text>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Thông tin đơn vé</Text>
               <Pressable onPress={() => { setModalVisible(false); setScanned(false); }}>
                 <IconSymbol name="xmark" size={24} color={theme.text} />
               </Pressable>
@@ -113,36 +150,38 @@ export default function QRScannerScreen() {
 
             {ticketData && (
               <ScrollView showsVerticalScrollIndicator={false}>
-                <View style={[styles.statusBadge, { backgroundColor: ticketData.status === 'valid' ? '#4CD964' : '#FF3B30' }]}>
-                  <Text style={styles.statusBadgeText}>{ticketData.status.toUpperCase()}</Text>
+                <View style={[styles.statusBadge, { backgroundColor: ticketData.status === 1 ? '#4CD964' : '#FF9500' }]}>
+                  <Text style={styles.statusBadgeText}>{ticketData.status === 1 ? 'ĐÃ THANH TOÁN' : 'CHƯA HOÀN TẤT'}</Text>
                 </View>
 
                 <View style={styles.ticketDetailSection}>
-                  <Text style={[styles.detailLabel, { color: theme.tabIconDefault }]}>MOVIE</Text>
-                  <Text style={[styles.detailValue, { color: theme.text }]}>{ticketData.movieTitle}</Text>
+                  <Text style={[styles.detailLabel, { color: theme.tabIconDefault }]}>MÃ ĐƠN</Text>
+                  <Text style={[styles.detailValue, { color: theme.text }]}>{ticketData.orderCode}</Text>
                 </View>
 
                 <View style={styles.ticketDetailSection}>
-                  <Text style={[styles.detailLabel, { color: theme.tabIconDefault }]}>CUSTOMER</Text>
+                  <Text style={[styles.detailLabel, { color: theme.tabIconDefault }]}>KHÁCH HÀNG</Text>
                   <Text style={[styles.detailValue, { color: theme.text }]}>{ticketData.customerName}</Text>
                 </View>
 
-                <View style={styles.ticketDetailSection}>
-                  <Text style={[styles.detailLabel, { color: theme.tabIconDefault }]}>DATE & TIME</Text>
-                  <Text style={[styles.detailValue, { color: theme.text }]}>{ticketData.dateTime}</Text>
-                </View>
-
-                <View style={styles.ticketDetailSection}>
-                  <Text style={[styles.detailLabel, { color: theme.tabIconDefault }]}>SEATS</Text>
-                  <Text style={[styles.detailValue, { color: theme.text }]}>{ticketData.seats.join(', ')}</Text>
-                </View>
+                {(ticketData.tickets ?? []).map((ticket, index) => (
+                  <View key={`${ticket.seatNumber}-${index}`} style={styles.ticketDetailSection}>
+                    <Text style={[styles.detailLabel, { color: theme.tabIconDefault }]}>VÉ {index + 1}</Text>
+                    <Text style={[styles.detailValue, { color: theme.text }]}>{ticket.movieTitle}</Text>
+                    <Text style={[styles.detailSubValue, { color: theme.tabIconDefault }]}>
+                      {ticket.showtime} • {ticket.roomName} • Ghế {ticket.seatNumber}
+                    </Text>
+                  </View>
+                ))}
 
                 <View style={styles.extrasSection}>
-                  <Text style={[styles.detailLabel, { color: theme.tabIconDefault }]}>PRODUCTS INCLUDED</Text>
-                  {ticketData.extras.map((extra, i) => (
+                  <Text style={[styles.detailLabel, { color: theme.tabIconDefault }]}>BẮP NƯỚC</Text>
+                  {(ticketData.foods ?? []).map((food, i) => (
                     <View key={i} style={styles.extraItem}>
                       <IconSymbol name="popcorn.fill" size={16} color={theme.tint} />
-                      <Text style={[styles.extraText, { color: theme.text }]}>{extra}</Text>
+                      <Text style={[styles.extraText, { color: theme.text }]}>
+                        {food.productName} x{food.quantity}
+                      </Text>
                     </View>
                   ))}
                 </View>
@@ -150,13 +189,13 @@ export default function QRScannerScreen() {
                 <Pressable 
                   style={[
                     styles.verifyButton, 
-                    { backgroundColor: ticketData.status === 'valid' ? theme.tint : theme.tabIconDefault }
+                    { backgroundColor: ticketData.status === 1 ? theme.tint : theme.tabIconDefault }
                   ]}
                   onPress={verifyTicket}
-                  disabled={ticketData.status !== 'valid'}
+                  disabled={ticketData.status !== 1 || isVerifying}
                 >
                   <Text style={styles.verifyButtonText}>
-                    {ticketData.status === 'valid' ? 'Confirm Check-in' : 'Cannot Verify'}
+                    {isVerifying ? 'Đang xử lý...' : ticketData.status === 1 ? 'Xác nhận đã kiểm tra' : 'Đơn chưa thanh toán'}
                   </Text>
                 </Pressable>
               </ScrollView>
@@ -249,21 +288,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  simulationButtons: {
-    marginTop: 30,
-    width: '80%',
-  },
-  simButton: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    padding: 10,
-    borderRadius: 8,
-    marginVertical: 5,
-    alignItems: 'center',
-  },
-  simButtonText: {
-    color: '#FFF',
-    fontSize: 12,
-  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -308,6 +332,10 @@ const styles = StyleSheet.create({
   detailValue: {
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  detailSubValue: {
+    fontSize: 13,
+    marginTop: 4,
   },
   extrasSection: {
     marginTop: 10,

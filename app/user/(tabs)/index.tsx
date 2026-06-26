@@ -16,12 +16,14 @@ import { PromoSlider } from '@/components/features/user/promo-slider';
 import { SearchBar } from '@/components/layout/search-bar';
 import { AppHeader } from '@/components/layout/app-header';
 import { Colors } from '@/constants/theme';
+import { useAuth } from '@/context/AuthContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function HomeScreen() {
   const { width } = useWindowDimensions();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
+  const { session } = useAuth();
   const [search, setSearch] = useState('');
   const [movies, setMovies] = useState<Movie[]>(MOVIES);
   const [loading, setLoading] = useState(true);
@@ -112,7 +114,7 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <AppHeader 
-        title="John Doe" 
+        title={session?.user?.fullname || session?.user?.username || 'Khách hàng'}
         subtitle="Welcome back," 
         rightElement={
           <View style={{ flex: 1, marginRight: 10, minWidth: width * 0.4 }}>
