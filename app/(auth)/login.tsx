@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, View, Image } from 'react-native';
+import { StyleSheet, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, View, Image , Alert } from 'react-native';
 import { Link, router } from 'expo-router';
 import { ThemedView } from '@/components/base/themed-view';
 import { ThemedText } from '@/components/base/themed-text';
@@ -7,37 +7,32 @@ import { AuthInput } from '@/features/auth/AuthInput';
 import { AuthButton } from '@/features/auth/AuthButton';
 import { useThemeColor } from '@/hooks/use-theme-color';
 
-import { authService } from '@/services/authService';
-import { Alert } from 'react-native';
+import { useAuth } from '@/context/AuthContext';
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [isStaffLogin, setIsStaffLogin] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const tintColor = useThemeColor({}, 'tint');
+  const { login, loginStaff } = useAuth();
 
   const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert('Thông báo', 'Vui lòng nhập đầy đủ email và mật khẩu.');
+    if (!username.trim() || !password) {
+      Alert.alert('Thông báo', 'Vui lòng nhập đầy đủ tên đăng nhập/email và mật khẩu.');
       return;
     }
 
     setIsLoading(true);
     try {
-      // Dựa trên code Java: "Staff đăng nhập bằng email gửi vào trường username"
-      // Tôi sẽ chỉ gửi 'username' và 'password' là cấu chuẩn của Spring Security
-      const response = await authService.login({ 
-        username: email, // Đây chính là Gmail bạn nhập
-        password: password 
-      });
-      
-      console.log('--- LOGIN SUCCESS ---');
-      console.log('Response Data:', JSON.stringify(response, null, 2));
-      
+      const response = await (isStaffLogin
+        ? loginStaff(username.trim(), password)
+        : login(username.trim(), password));
+
       // Theo code Java: Trả về 'user' (khách) hoặc 'staff' (nhân viên)
       if (response.staff) {
         // Nếu có object staff -> Đây là nhân viên
-        Alert.alert('Thành công', `Chào mừng nhân viên: ${response.staff.fullName || 'Staff'}`);
+        Alert.alert('Thành công', `Chào mừng nhân viên: ${response.staff.fullname || 'Staff'}`);
         router.replace('/staff');
       } else if (response.user) {
         // Nếu có object user -> Đây là khách hàng
@@ -48,7 +43,6 @@ export default function LoginScreen() {
       }
       
     } catch (error: any) {
-      console.error('Login Error:', error);
       Alert.alert('Đăng nhập thất bại', error.message || 'Tài khoản hoặc mật khẩu không chính xác.');
     } finally {
       setIsLoading(false);
@@ -69,15 +63,17 @@ export default function LoginScreen() {
               resizeMode="contain"
             />
             <ThemedText type="title" style={styles.title}>Chào mừng trở lại!</ThemedText>
-            <ThemedText style={styles.subtitle}>Đăng nhập để tiếp tục đặt vé xem phim</ThemedText>
+            <ThemedText style={styles.subtitle}>
+              {isStaffLogin ? 'Khu vực dành cho nhân viên rạp' : 'Đăng nhập để tiếp tục đặt vé xem phim'}
+            </ThemedText>
           </View>
 
           <View style={styles.form}>
             <AuthInput
-              label="Email hoặc Số điện thoại"
-              placeholder="Nhập email của bạn"
-              value={email}
-              onChangeText={setEmail}
+              label={isStaffLogin ? 'Tên đăng nhập / Email nhân viên' : 'Tên đăng nhập / Email'}
+              placeholder={isStaffLogin ? 'Nhập username hoặc email staff' : 'Nhập username hoặc email'}
+              value={username}
+              onChangeText={setUsername}
               keyboardType="email-address"
               autoCapitalize="none"
             />
@@ -94,19 +90,37 @@ export default function LoginScreen() {
             </TouchableOpacity>
 
             <AuthButton
-              title="Đăng Nhập"
+              title={isStaffLogin ? 'Đăng Nhập Nhân Viên' : 'Đăng Nhập'}
               onPress={handleLogin}
               loading={isLoading}
             />
 
             <View style={styles.footer}>
-              <ThemedText>Bạn chưa có tài khoản? </ThemedText>
-              <Link href="/(auth)/register" asChild>
+              <ThemedText>{isStaffLogin ? 'Bạn là khách hàng? ' : 'Bạn chưa có tài khoản? '}</ThemedText>
+              {isStaffLogin ? (
                 <TouchableOpacity>
-                  <ThemedText style={[styles.link, { color: tintColor }]} type="defaultSemiBold">Đăng ký ngay</ThemedText>
+                  <ThemedText
+                    style={[styles.link, { color: tintColor }]}
+                    type="defaultSemiBold"
+                    onPress={() => setIsStaffLogin(false)}>
+                    Đăng nhập khách hàng
+                  </ThemedText>
                 </TouchableOpacity>
-              </Link>
+              ) : (
+                <Link href="/(auth)/register" asChild>
+                  <TouchableOpacity>
+                    <ThemedText style={[styles.link, { color: tintColor }]} type="defaultSemiBold">Đăng ký ngay</ThemedText>
+                  </TouchableOpacity>
+                </Link>
+              )}
             </View>
+            {!isStaffLogin && (
+              <TouchableOpacity style={styles.staffLink} onPress={() => setIsStaffLogin(true)}>
+                <ThemedText style={[styles.link, { color: tintColor }]} type="defaultSemiBold">
+                  Nhân viên? Đăng nhập khu vực staff
+                </ThemedText>
+              </TouchableOpacity>
+            )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -162,5 +176,9 @@ const styles = StyleSheet.create({
   },
   link: {
     fontSize: 16,
+  },
+  staffLink: {
+    alignSelf: 'center',
+    marginTop: 16,
   },
 });

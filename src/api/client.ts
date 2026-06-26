@@ -1,72 +1,53 @@
 import { BASE_URL } from './config';
 
-/**
- * API Client dùng Fetch API để thực hiện các yêu cầu mạng.
- * Hỗ trợ các phương thức GET, POST, PUT, DELETE.
- */
-export const apiClient = {
-  async get(endpoint: string, headers = {}) {
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...headers,
-      },
-    });
-    return this.handleResponse(response);
-  },
+let accessToken: string | null = null;
 
-  async post(endpoint: string, data: any, headers = {}) {
-    console.log(`[API Request] POST ${BASE_URL}${endpoint}:`, JSON.stringify(data, null, 2));
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...headers,
-      },
-      body: JSON.stringify(data),
-    });
-    return this.handleResponse(response);
-  },
+export function setAccessToken(token: string | null) {
+  accessToken = token;
+}
 
-  async put(endpoint: string, data: any, headers = {}) {
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        ...headers,
-      },
-      body: JSON.stringify(data),
-    });
-    return this.handleResponse(response);
-  },
+async function request(endpoint: string, init: RequestInit = {}) {
+  const url = `${BASE_URL}${endpoint}`;
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      Accept: 'application/json',
+      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...init.headers,
+    },
+  });
 
-  async delete(endpoint: string, headers = {}) {
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        ...headers,
-      },
-    });
-    return this.handleResponse(response);
-  },
-
-  async handleResponse(response: Response) {
-    const text = await response.text(); // Lấy text thô để tránh lỗi nếu không phải JSON
-    console.log(`[API Response] ${response.status} ${response.url}:`, text);
-    
-    let json;
+  const text = await response.text();
+  let payload: unknown = null;
+  if (text) {
     try {
-      json = JSON.parse(text);
-    } catch (e) {
-      throw new Error(`Server không trả về JSON: ${text.substring(0, 100)}`);
-    }
+      payload = JSON.parse(text);
+    } catch {
+      if (!response.ok) {
+        throw new Error(
+          `Không kết nối được BE qua ${BASE_URL}. Kiểm tra Docker BE/FE đã chạy và API proxy /api có hoạt động.`
+        );
+      }
 
-    if (!response.ok) {
-      throw new Error(json.message || `Lỗi hệ thống (${response.status})`);
+      throw new Error(`Máy chủ trả về dữ liệu không hợp lệ từ ${url}.`);
     }
-    
-    return json.data !== undefined ? json.data : json;
-  },
+  }
+
+  if (!response.ok) {
+    const message = (payload as { message?: string } | null)?.message;
+    throw new Error(message || `Yêu cầu thất bại (${response.status}).`);
+  }
+
+  const data = payload as { data?: unknown } | null;
+  return data && 'data' in data ? data.data : payload;
+}
+
+export const apiClient = {
+  get: (endpoint: string, headers: HeadersInit = {}) => request(endpoint, { method: 'GET', headers }),
+  post: (endpoint: string, data?: unknown, headers: HeadersInit = {}) =>
+    request(endpoint, { method: 'POST', headers, body: JSON.stringify(data ?? {}) }),
+  put: (endpoint: string, data?: unknown, headers: HeadersInit = {}) =>
+    request(endpoint, { method: 'PUT', headers, body: JSON.stringify(data ?? {}) }),
+  delete: (endpoint: string, headers: HeadersInit = {}) => request(endpoint, { method: 'DELETE', headers }),
 };
