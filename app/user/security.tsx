@@ -1,20 +1,29 @@
 import React, { useState } from 'react';
 import { StyleSheet, ScrollView, View, Alert } from 'react-native';
 import { router } from 'expo-router';
+import { apiClient } from '@/api/client';
+import { API_ENDPOINTS } from '@/api/config';
 import { ThemedView } from '@/components/base/themed-view';
 import { ThemedText } from '@/components/base/themed-text';
 import { AuthInput } from '@/features/auth/AuthInput';
 import { AuthButton } from '@/features/auth/AuthButton';
+import { useAuth } from '@/context/AuthContext';
 
 export default function SecurityScreen() {
+  const { session } = useAuth();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleUpdatePassword = () => {
+  const handleUpdatePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
       Alert.alert('Lỗi', 'Vui lòng điền đầy đủ thông tin.');
+      return;
+    }
+
+    if (!session?.user?.userId) {
+      Alert.alert('Lỗi', 'Bạn cần đăng nhập tài khoản khách hàng.');
       return;
     }
 
@@ -24,11 +33,19 @@ export default function SecurityScreen() {
     }
 
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      await apiClient.put(API_ENDPOINTS.USER_PASSWORD(session.user.userId), {
+        currentPassword,
+        newPassword,
+      });
+
       Alert.alert('Thành công', 'Mật khẩu đã được thay đổi.');
       router.back();
-    }, 1500);
+    } catch (error: any) {
+      Alert.alert('Không đổi được mật khẩu', error.message || 'Vui lòng kiểm tra mật khẩu hiện tại.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

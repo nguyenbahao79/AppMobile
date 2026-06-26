@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, FlatList, Image, Pressable, Modal, SafeAreaView, Platform, ScrollView } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, StyleSheet, FlatList, Image, Pressable, Modal, SafeAreaView, Platform, ScrollView , RefreshControl } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AppHeader } from '@/components/layout/app-header';
@@ -7,7 +8,7 @@ import { ThemedText } from '@/components/base/themed-text';
 import { ThemedView } from '@/components/base/themed-view';
 import { IconSymbol } from '@/components/base/icon-symbol';
 import { useTickets, Ticket } from '@/context/TicketContext';
-import { RefreshControl } from 'react-native';
+
 
 export default function TicketsScreen() {
   const { tickets, cancelTicket, fetchTickets, loading } = useTickets();
@@ -18,6 +19,20 @@ export default function TicketsScreen() {
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchTickets();
+    }, [fetchTickets])
+  );
+
+  useEffect(() => {
+    if (!selectedTicket) return;
+    const updatedTicket = tickets.find((ticket) => ticket.id === selectedTicket.id);
+    if (updatedTicket && updatedTicket !== selectedTicket) {
+      setSelectedTicket(updatedTicket);
+    }
+  }, [selectedTicket, tickets]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -115,8 +130,18 @@ export default function TicketsScreen() {
                 contentContainerStyle={styles.modalScrollContent}
               >
                 <View style={styles.qrContainer}>
-                  <Image source={{ uri: selectedTicket.qrCode }} style={styles.qrCode} />
-                  <ThemedText style={styles.ticketId}>Mã vé: {selectedTicket.id}</ThemedText>
+                  {selectedTicket.qrCode ? (
+                    <Image source={{ uri: selectedTicket.qrCode }} style={styles.qrCode} />
+                  ) : (
+                    <View style={[styles.qrCode, styles.qrMissing]}>
+                      <IconSymbol name="qrcode" size={56} color={theme.tabIconDefault} />
+                      <ThemedText style={styles.qrMissingText}>QR chưa sẵn sàng</ThemedText>
+                    </View>
+                  )}
+                  <ThemedText style={styles.ticketId}>Mã vé: {selectedTicket.ticketCode || selectedTicket.id}</ThemedText>
+                  {selectedTicket.qrToken ? (
+                    <ThemedText style={styles.qrSecureText}>QR bảo mật do hệ thống mã hóa</ThemedText>
+                  ) : null}
                 </View>
 
                 <View style={styles.detailSection}>
@@ -135,7 +160,11 @@ export default function TicketsScreen() {
                     </View>
                     <View style={styles.infoItem}>
                       <ThemedText style={styles.infoLabel}>Phòng chiếu</ThemedText>
-                      <ThemedText style={styles.infoValue}>Cinema 04</ThemedText>
+                      <ThemedText style={styles.infoValue}>{selectedTicket.roomName || '—'}</ThemedText>
+                    </View>
+                    <View style={styles.infoItem}>
+                      <ThemedText style={styles.infoLabel}>Chi nhánh</ThemedText>
+                      <ThemedText style={styles.infoValue}>{selectedTicket.cinemaName || '—'}</ThemedText>
                     </View>
                     <View style={styles.infoItem}>
                       <ThemedText style={styles.infoLabel}>Ghế</ThemedText>
@@ -158,7 +187,7 @@ export default function TicketsScreen() {
                 </View>
 
                 <ThemedText style={styles.noteText}>
-                  * Vui lòng đưa mã QR này cho nhân viên tại quầy để soát vé.
+                  * Vui lòng đưa mã QR này cho nhân viên tại quầy để soát vé. QR không chứa thông tin vé ở dạng đọc được.
                 </ThemedText>
 
                 {selectedTicket.status === 'active' && (
@@ -231,7 +260,10 @@ const styles = StyleSheet.create({
   modalScrollContent: { paddingBottom: Platform.OS === 'ios' ? 40 : 20 },
   qrContainer: { alignItems: 'center', marginBottom: 24 },
   qrCode: { width: 180, height: 180, backgroundColor: '#FFF', borderRadius: 20, padding: 10 },
+  qrMissing: { alignItems: 'center', justifyContent: 'center' },
+  qrMissingText: { marginTop: 8, fontSize: 12, opacity: 0.5 },
   ticketId: { marginTop: 12, opacity: 0.5, fontSize: 12, letterSpacing: 1 },
+  qrSecureText: { marginTop: 6, opacity: 0.45, fontSize: 11, fontStyle: 'italic' },
   detailSection: { padding: 20, borderRadius: 24, backgroundColor: '#00000005', marginBottom: 20 },
   detailMovieTitle: { fontSize: 22, textAlign: 'center', marginBottom: 20 },
   infoGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },

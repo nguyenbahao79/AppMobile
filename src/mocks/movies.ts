@@ -10,6 +10,9 @@ export interface Movie {
   releaseDate: string;
   isNowPlaying: boolean;
   isHot?: boolean;
+  status?: number;
+  posterUrl?: string;
+  banner?: string;
 }
 
 export const MOVIES: Movie[] = [

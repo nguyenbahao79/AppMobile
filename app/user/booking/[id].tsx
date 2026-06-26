@@ -1,13 +1,17 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { View, StyleSheet, Pressable, ScrollView, SafeAreaView, Alert, Platform, Image } from 'react-native';
+import RealBookingScreen from '@/screens/RealBookingScreen';
+import { View, StyleSheet, Pressable, ScrollView, SafeAreaView, Alert, Image, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack, Href } from 'expo-router';
-import { MOVIES } from '@/mocks/movies';
+import { MOVIES , Movie } from '@/mocks/movies';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ThemedText } from '@/components/base/themed-text';
 import { ThemedView } from '@/components/base/themed-view';
 import { IconSymbol } from '@/components/base/icon-symbol';
 import { useTickets, Ticket } from '@/context/TicketContext';
+
+import { movieService } from '@/services/movieService';
+
 
 // Cấu trúc ghế
 const ROWS_NORMAL = ['A', 'B', 'C'];
@@ -41,10 +45,9 @@ const SOLD_SEATS = ['A3', 'B5', 'D4', 'E2', 'F7', 'H2'];
 const DATES = ['20 Th10', '21 Th10', '22 Th10', '23 Th10', '24 Th10'];
 const TIMES = ['10:00', '13:30', '16:45', '19:30', '21:00'];
 
-import { movieService } from '@/services/movieService';
-import { Movie } from '@/mocks/movies';
+export default RealBookingScreen;
 
-export default function BookingScreen() {
+export function LegacyBookingScreen() {
   const { id } = useLocalSearchParams();
   const [movie, setMovie] = useState<Movie | null>(null);
   const [loading, setLoading] = useState(true);
@@ -140,7 +143,7 @@ export default function BookingScreen() {
               paymentMethod: PAYMENT_METHODS.find(m => m.id === paymentMethod)?.name || '',
               bookingDate: new Date().toLocaleDateString('vi-VN'),
               status: 'active',
-              qrCode: 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=TICKET-' + Math.random(),
+              qrCode: '',
             };
             
             addTicket(newTicket);
@@ -174,6 +177,10 @@ export default function BookingScreen() {
     if (step > 1) setStep(step - 1);
     else router.back();
   };
+
+  if (loading) {
+    return <ThemedView style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}><ActivityIndicator size="large" color={theme.tint} /></ThemedView>;
+  }
 
   if (!movie) return null;
 
