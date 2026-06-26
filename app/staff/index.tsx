@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable, SafeAreaView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Colors } from '@/constants/theme';
+import { useAuth } from '@/context/AuthContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { IconSymbol } from '@/components/base/icon-symbol';
 
@@ -9,6 +10,7 @@ export default function StaffDashboard() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
+  const { session, logout } = useAuth();
 
   const stats = [
     { label: 'Scanned Today', value: '42' },
@@ -21,7 +23,9 @@ export default function StaffDashboard() {
       <View style={styles.content}>
         <View style={styles.header}>
           <Text style={[styles.title, { color: theme.text }]}>Operations Hub</Text>
-          <Text style={[styles.subtitle, { color: theme.tabIconDefault }]}>Logged in as Ticket Staff</Text>
+          <Text style={[styles.subtitle, { color: theme.tabIconDefault }]}>
+            {session?.staff?.fullname || session?.staff?.username || 'Ticket Staff'}
+          </Text>
         </View>
 
         <View style={styles.statsContainer}>
@@ -46,9 +50,12 @@ export default function StaffDashboard() {
 
         <Pressable 
           style={styles.exitButton}
-          onPress={() => router.replace('/user/profile')}
+          onPress={() => {
+            logout();
+            router.replace('/(auth)/login');
+          }}
         >
-          <Text style={[styles.exitText, { color: theme.tabIconDefault }]}>Return to Customer View</Text>
+          <Text style={[styles.exitText, { color: theme.tabIconDefault }]}>Đăng xuất</Text>
         </Pressable>
       </View>
     </SafeAreaView>

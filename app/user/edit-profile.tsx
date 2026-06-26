@@ -1,27 +1,62 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, ScrollView, View, Image, TouchableOpacity, Alert } from 'react-native';
 import { router } from 'expo-router';
+import { apiClient } from '@/api/client';
+import { API_ENDPOINTS } from '@/api/config';
 import { ThemedView } from '@/components/base/themed-view';
 import { ThemedText } from '@/components/base/themed-text';
 import { AuthInput } from '@/features/auth/AuthInput';
 import { AuthButton } from '@/features/auth/AuthButton';
 import { IconSymbol } from '@/components/base/icon-symbol';
+import { useAuth } from '@/context/AuthContext';
 import { useThemeColor } from '@/hooks/use-theme-color';
 
 export default function EditProfileScreen() {
-  const [fullName, setFullName] = useState('John Doe');
-  const [email, setEmail] = useState('johndoe@example.com');
-  const [phone, setPhone] = useState('0987654321');
+  const { session, updateSessionUser } = useAuth();
+  const user = session?.user;
+  const [fullName, setFullName] = useState(user?.fullname || '');
+  const [email, setEmail] = useState(user?.email || '');
+  const [phone, setPhone] = useState(user?.phone || '');
   const [isLoading, setIsLoading] = useState(false);
   const tintColor = useThemeColor({}, 'tint');
 
-  const handleUpdate = () => {
+  useEffect(() => {
+    setFullName(user?.fullname || '');
+    setEmail(user?.email || '');
+    setPhone(user?.phone || '');
+  }, [user]);
+
+  const handleUpdate = async () => {
+    if (!user?.userId) {
+      Alert.alert('Lỗi', 'Bạn cần đăng nhập tài khoản khách hàng.');
+      return;
+    }
+
+    if (!fullName.trim() || !email.trim() || !phone.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ họ tên, email và số điện thoại.');
+      return;
+    }
+
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      const updated = await apiClient.put(API_ENDPOINTS.USER_DETAIL(user.userId), {
+        fullname: fullName.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+      });
+
+      updateSessionUser({
+        ...user,
+        ...(updated as typeof user),
+      });
+
       Alert.alert('Thành công', 'Thông tin cá nhân đã được cập nhật.');
       router.back();
-    }, 1000);
+    } catch (error: any) {
+      Alert.alert('Không cập nhật được', error.message || 'Vui lòng thử lại.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

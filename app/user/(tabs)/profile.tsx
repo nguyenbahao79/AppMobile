@@ -7,17 +7,33 @@ import { IconSymbol } from '@/components/base/icon-symbol';
 import { AppHeader } from '@/components/layout/app-header';
 import { ThemedText } from '@/components/base/themed-text';
 import { ThemedView } from '@/components/base/themed-view';
+import { useAuth } from '@/context/AuthContext';
+import { useTickets } from '@/context/TicketContext';
+
+type MenuItem = {
+  icon: string;
+  title: string;
+  color: string;
+  route?: string;
+  action?: () => void;
+  hasSwitch?: boolean;
+  switchValue?: boolean;
+  onSwitchChange?: (value: boolean) => void;
+};
 
 export default function ProfileScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
+  const { session, logout } = useAuth();
+  const { tickets } = useTickets();
+  const user = session?.user;
 
   const [isNotificationsEnabled, setIsNotificationsEnabled] = useState(true);
   const [isAutoDisplayMode, setIsAutoDisplayMode] = useState(true);
 
-  const menuSections = [
+  const menuSections: { title: string; items: MenuItem[] }[] = [
     {
       title: 'Tài khoản',
       items: [
@@ -57,12 +73,12 @@ export default function ProfileScreen() {
   ];
 
   const stats = [
-    { label: 'Vé đã đặt', value: '12' },
-    { label: 'Phim đã xem', value: '8' },
-    { label: 'Điểm thưởng', value: '150' },
+    { label: 'Vé đã đặt', value: String(tickets.length) },
+    { label: 'Phim đã xem', value: String(tickets.filter((ticket) => ticket.status === 'used').length) },
+    { label: 'Điểm thưởng', value: String(user?.points ?? 0) },
   ];
 
-  const handlePress = (item: any) => {
+  const handlePress = (item: MenuItem) => {
     if (item.hasSwitch) return; // Không làm gì nếu có switch (xử lý qua onSwitchChange)
     
     if (item.route) {
@@ -86,6 +102,7 @@ export default function ProfileScreen() {
           text: 'Đăng xuất', 
           style: 'destructive',
           onPress: () => {
+            logout();
             router.replace('/(auth)/login' as Href);
           }
         },
@@ -106,8 +123,8 @@ export default function ProfileScreen() {
               style={styles.avatar}
             />
             <View style={styles.nameContainer}>
-              <ThemedText type="title" style={styles.name}>John Doe</ThemedText>
-              <ThemedText style={styles.email}>johndoe@example.com</ThemedText>
+              <ThemedText type="title" style={styles.name}>{user?.fullname || user?.username || 'Khách hàng'}</ThemedText>
+              <ThemedText style={styles.email}>{user?.email || user?.phone || 'Chưa cập nhật email'}</ThemedText>
               <Pressable style={[styles.editBadge, { backgroundColor: theme.tint + '20' }]}>
                 <ThemedText style={[styles.editBadgeText, { color: theme.tint }]}>Thành viên Vàng</ThemedText>
               </Pressable>
@@ -149,7 +166,7 @@ export default function ProfileScreen() {
                   {item.hasSwitch ? (
                     <Switch
                       value={item.switchValue}
-                      onValueChange={item.onSwitchChange}
+                    onValueChange={item.onSwitchChange}
                       trackColor={{ false: '#767577', true: theme.tint }}
                       thumbColor={Platform.OS === 'ios' ? undefined : (item.switchValue ? '#f4f3f4' : '#f4f3f4')}
                     />
