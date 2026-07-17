@@ -31,6 +31,13 @@ export default function StaffLayout() {
           headerShown: true,
         }}
       />
+      <Stack.Screen
+        name="profile"
+        options={{
+          title: 'Hồ sơ nhân viên',
+          headerShown: true,
+        }}
+      />
     </Stack>
   );
 }

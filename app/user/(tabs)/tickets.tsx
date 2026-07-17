@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, StyleSheet, FlatList, Image, Pressable, Modal, SafeAreaView, Platform, ScrollView , RefreshControl } from 'react-native';
+import { View, StyleSheet, FlatList, Image, Pressable, Modal, SafeAreaView, Platform, ScrollView, RefreshControl, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -64,6 +64,12 @@ export default function TicketsScreen() {
           <ThemedText style={styles.dateTimeText}>{item.date}</ThemedText>
           <IconSymbol name="clock" size={14} color={theme.tabIconDefault} style={{ marginLeft: 10 }} />
           <ThemedText style={styles.dateTimeText}>{item.time}</ThemedText>
+        </View>
+        <View style={styles.dateTimeRow}>
+          <IconSymbol name="mappin.and.ellipse" size={14} color={theme.tabIconDefault} />
+          <ThemedText style={styles.dateTimeText} numberOfLines={1}>
+            {item.cinemaName || 'Chưa có chi nhánh'}
+          </ThemedText>
         </View>
         <View style={styles.seatsRow}>
           <IconSymbol name="ticket.fill" size={14} color={theme.tint} />
@@ -166,6 +172,10 @@ export default function TicketsScreen() {
                       <ThemedText style={styles.infoLabel}>Chi nhánh</ThemedText>
                       <ThemedText style={styles.infoValue}>{selectedTicket.cinemaName || '—'}</ThemedText>
                     </View>
+                    <View style={styles.infoItemFull}>
+                      <ThemedText style={styles.infoLabel}>Địa chỉ rạp</ThemedText>
+                      <ThemedText style={styles.infoValue}>{selectedTicket.cinemaAddress || '—'}</ThemedText>
+                    </View>
                     <View style={styles.infoItem}>
                       <ThemedText style={styles.infoLabel}>Ghế</ThemedText>
                       <ThemedText style={styles.infoValue}>{selectedTicket.seats.join(', ')}</ThemedText>
@@ -184,18 +194,35 @@ export default function TicketsScreen() {
                     <ThemedText style={styles.infoLabel}>Thanh toán qua</ThemedText>
                     <ThemedText style={styles.infoValue}>{selectedTicket.paymentMethod}</ThemedText>
                   </View>
+                  <View style={styles.priceRow}>
+                    <ThemedText style={styles.infoLabel}>Ngày đặt</ThemedText>
+                    <ThemedText style={styles.infoValue}>{selectedTicket.bookingDate}</ThemedText>
+                  </View>
                 </View>
 
                 <ThemedText style={styles.noteText}>
                   * Vui lòng đưa mã QR này cho nhân viên tại quầy để soát vé. QR không chứa thông tin vé ở dạng đọc được.
                 </ThemedText>
 
-                {selectedTicket.status === 'active' && (
-                  <Pressable 
+                {selectedTicket.rawStatus === 'pending' && (
+                  <Pressable
                     style={styles.cancelTicketBtn}
                     onPress={() => {
-                      cancelTicket(selectedTicket.id);
-                      setModalVisible(false);
+                      Alert.alert('Hủy vé', 'Bạn có chắc muốn hủy đơn vé đang chờ thanh toán này?', [
+                        { text: 'Không', style: 'cancel' },
+                        {
+                          text: 'Hủy vé',
+                          style: 'destructive',
+                          onPress: async () => {
+                            try {
+                              await cancelTicket(selectedTicket.id);
+                              setModalVisible(false);
+                            } catch (error) {
+                              Alert.alert('Không hủy được', error instanceof Error ? error.message : 'Vui lòng thử lại sau.');
+                            }
+                          },
+                        },
+                      ]);
                     }}
                   >
                     <ThemedText style={{ color: '#FF3B30', fontWeight: 'bold' }}>Hủy vé này</ThemedText>
@@ -268,6 +295,7 @@ const styles = StyleSheet.create({
   detailMovieTitle: { fontSize: 22, textAlign: 'center', marginBottom: 20 },
   infoGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   infoItem: { width: '45%', marginBottom: 16 },
+  infoItemFull: { width: '100%', marginBottom: 16 },
   infoLabel: { fontSize: 12, opacity: 0.5, marginBottom: 4 },
   infoValue: { fontSize: 15, fontWeight: '600' },
   divider: { height: 1, backgroundColor: '#00000010', marginVertical: 10 },

@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "BANVEXEMPHIM",
-    "slug": "BANVEXEMPHIM",
+    "name": "MovieZone",
+    "slug": "MovieZone",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "banvexemphim",
+    "scheme": "moviezone",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -44,7 +44,8 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

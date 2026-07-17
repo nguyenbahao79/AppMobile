@@ -12,6 +12,7 @@ export type Showtime = {
   roomName: string;
   cinemaId?: number;
   cinemaName?: string;
+  cinemaAddress?: string;
   basePrice: number;
   price: number;
   status: string;
@@ -64,6 +65,17 @@ const toNumber = (value: unknown, fallback = 0) => {
   return Number.isFinite(n) ? n : fallback;
 };
 
+const normalizeText = (value: unknown) =>
+  String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+const isCoupleSeatName = (value: unknown) => {
+  const name = normalizeText(value);
+  return name.includes('doi') || name.includes('couple') || name.includes('double') || name.includes('love');
+};
+
 function mapShowtime(raw: RawRecord): Showtime {
   return {
     id: toNumber(raw.id),
@@ -76,6 +88,10 @@ function mapShowtime(raw: RawRecord): Showtime {
     roomName: String(raw.room_name ?? raw.roomName ?? ''),
     cinemaId: raw.cinema_id != null || raw.cinemaId != null ? toNumber(raw.cinema_id ?? raw.cinemaId) : undefined,
     cinemaName: raw.cinema_name != null || raw.cinemaName != null ? String(raw.cinema_name ?? raw.cinemaName) : undefined,
+    cinemaAddress:
+      raw.cinema_address != null || raw.cinemaAddress != null || (raw.cinema as RawRecord | undefined)?.address != null
+        ? String(raw.cinema_address ?? raw.cinemaAddress ?? (raw.cinema as RawRecord | undefined)?.address)
+        : undefined,
     basePrice: toNumber(raw.base_price ?? raw.basePrice),
     price: toNumber(raw.price),
     status: String(raw.status ?? ''),
@@ -91,7 +107,7 @@ function mapSeat(raw: RawRecord): Seat {
     row: String(raw.row ?? ''),
     number: String(raw.number ?? ''),
     seatTypeName: raw.seatTypeName == null ? undefined : String(raw.seatTypeName),
-    coupleSeat: Boolean(raw.coupleSeat),
+    coupleSeat: Boolean(raw.coupleSeat ?? raw.couple_seat) || isCoupleSeatName(raw.seatTypeName ?? raw.seat_type_name),
     seatTypeColor: raw.seatTypeColor == null ? undefined : String(raw.seatTypeColor),
     seatTypeSurcharge: toNumber(raw.seatTypeSurcharge),
     status: String(raw.status ?? 'available'),
@@ -108,7 +124,7 @@ function mapProduct(raw: RawRecord): Product {
   };
 }
 
-function webReturnUrl(path: string) {
+export function webReturnUrl(path: string) {
   const webBase = BASE_URL.replace(/\/api\/v1\/?$/i, '');
   return `${webBase}${path}`;
 }
@@ -150,7 +166,18 @@ export const bookingService = {
     await apiClient.post(API_ENDPOINTS.HOLD_SEATS, { showtimeId, holderId, seatIds });
   },
 
-  async quote(payload: { showtimeId: number; seatIds: number[]; snacks?: { productId: number; quantity: number }[] }) {
+  /** Ghế đang được người khác (khác holderId) giữ tạm — dùng để hiện trạng thái "đang được giữ". */
+  async getPeerHolds(showtimeId: number, holderId: string) {
+    const data = await apiClient.get(API_ENDPOINTS.SEAT_HOLDS_PEER(showtimeId, holderId));
+    return Array.isArray(data) ? data.map((id) => Number(id)).filter((id) => Number.isFinite(id)) : [];
+  },
+
+  async quote(payload: {
+    showtimeId: number;
+    seatIds: number[];
+    snacks?: { productId: number; quantity: number }[];
+    userVoucherId?: number;
+  }) {
     return apiClient.post(API_ENDPOINTS.QUOTE_TICKETS, payload) as Promise<TicketQuote>;
   },
 
@@ -159,11 +186,23 @@ export const bookingService = {
     seatIds: number[];
     clientHoldId?: string;
     snacks?: { productId: number; quantity: number }[];
+    userVoucherId?: number;
+    returnUrl?: string;
+    cancelUrl?: string;
   }) {
     return apiClient.post(API_ENDPOINTS.CHECKOUT_TICKETS, {
       ...payload,
-      returnUrl: webReturnUrl('/payment/success'),
-      cancelUrl: webReturnUrl('/payment/cancel'),
+      returnUrl: payload.returnUrl ?? webReturnUrl('/payment/success'),
+      cancelUrl: payload.cancelUrl ?? webReturnUrl('/payment/cancel'),
     }) as Promise<CheckoutResponse>;
+  },
+
+  async confirmPayos(payosOrderCode: number) {
+    return apiClient.post(API_ENDPOINTS.CONFIRM_PAYOS_TICKETS, { payosOrderCode });
+  },
+
+  /** Chỉ hủy được đơn vé đang ở trạng thái "pending" (chưa thanh toán) — khớp hành vi web. */
+  async cancelPendingOrder(payosOrderCode: number) {
+    return apiClient.post(API_ENDPOINTS.CANCEL_PENDING_TICKETS, { payosOrderCode });
   },
 };

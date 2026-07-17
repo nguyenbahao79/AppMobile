@@ -1,32 +1,41 @@
 import React from 'react';
-import { View, Text, StyleSheet, FlatList, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Dimensions, Pressable } from 'react-native';
 import { Image } from 'expo-image';
-import { PROMOTIONS } from '@/mocks/movies';
+import { Link, Href } from 'expo-router';
+import { Movie } from '@/mocks/movies';
 
 const { width } = Dimensions.get('window');
 
-export function PromoSlider() {
-  const renderItem = ({ item }: { item: typeof PROMOTIONS[0] }) => (
-    <View style={styles.card}>
-      <Image 
-        source={{ uri: item.image }} 
-        style={styles.image} 
-        contentFit="cover"
-        transition={500}
-      />
-      <View style={styles.overlay}>
-        <Text style={styles.title}>{item.title}</Text>
-        <Text style={styles.description}>{item.description}</Text>
-      </View>
-    </View>
+interface PromoSliderProps {
+  movies: Movie[];
+}
+
+export function PromoSlider({ movies }: PromoSliderProps) {
+  if (!movies.length) return null;
+
+  const renderItem = ({ item }: { item: Movie }) => (
+    <Link href={`/user/movie/${item.id}` as Href} asChild>
+      <Pressable style={styles.card}>
+        <Image
+          source={item.banner || item.posterUrl}
+          style={styles.image}
+          contentFit="cover"
+          transition={500}
+        />
+        <View style={styles.overlay}>
+          <Text style={styles.title} numberOfLines={1}>{item.title}</Text>
+          {item.genre ? <Text style={styles.description} numberOfLines={1}>{item.genre}</Text> : null}
+        </View>
+      </Pressable>
+    </Link>
   );
 
   return (
     <View style={styles.container}>
       <FlatList
-        data={PROMOTIONS}
+        data={movies}
         renderItem={renderItem}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => `promo-${item.id}`}
         horizontal
         showsHorizontalScrollIndicator={false}
         snapToInterval={width - 40}

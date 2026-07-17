@@ -1,10 +1,16 @@
-import React from 'react';
-import { View, Text, StyleSheet, Pressable, SafeAreaView } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, SafeAreaView, RefreshControl, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { IconSymbol } from '@/components/base/icon-symbol';
+import { staffService, StaffDashboardStats } from '@/services/staffService';
+
+function formatCurrency(value?: number) {
+  return `${(value ?? 0).toLocaleString('vi-VN')}đ`;
+}
 
 export default function StaffDashboard() {
   const router = useRouter();
@@ -12,33 +18,64 @@ export default function StaffDashboard() {
   const theme = Colors[colorScheme ?? 'light'];
   const { session, logout } = useAuth();
 
-  const stats = [
-    { label: 'Scanned Today', value: '42' },
-    { label: 'Pending', value: '128' },
-    { label: 'Invalid', value: '2' },
+  const [stats, setStats] = useState<StaffDashboardStats>({});
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadStats = useCallback(async () => {
+    try {
+      const data = await staffService.getDashboardStats();
+      setStats(data || {});
+    } catch (error) {
+      console.warn('Không tải được thống kê ca làm:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadStats();
+    }, [loadStats])
+  );
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadStats();
+  };
+
+  const statCards = [
+    { label: 'Doanh thu hôm nay', value: loading ? '—' : formatCurrency(stats.totalRevenue) },
+    { label: 'Vé bán hôm nay', value: loading ? '—' : String(stats.totalTicketsSold ?? 0) },
+    { label: 'Sản phẩm bán hôm nay', value: loading ? '—' : String(stats.totalProductsSold ?? 0) },
   ];
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={styles.content}>
-        <View style={styles.header}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
+      >
+        <Pressable style={styles.header} onPress={() => router.push('/staff/profile')}>
           <Text style={[styles.title, { color: theme.text }]}>Operations Hub</Text>
           <Text style={[styles.subtitle, { color: theme.tabIconDefault }]}>
             {session?.staff?.fullname || session?.staff?.username || 'Ticket Staff'}
+            {stats.cinemaName ? ` · ${stats.cinemaName}` : ''}
           </Text>
-        </View>
+        </Pressable>
 
         <View style={styles.statsContainer}>
-          {stats.map((stat, index) => (
+          {statCards.map((stat, index) => (
             <View key={index} style={[styles.statBox, { backgroundColor: colorScheme === 'dark' ? '#1c1c1e' : '#f2f2f7' }]}>
-              <Text style={[styles.statValue, { color: theme.tint }]}>{stat.value}</Text>
+              <Text style={[styles.statValue, { color: theme.tint }]} numberOfLines={1} adjustsFontSizeToFit>{stat.value}</Text>
               <Text style={[styles.statLabel, { color: theme.tabIconDefault }]}>{stat.label}</Text>
             </View>
           ))}
         </View>
 
         <View style={styles.mainActions}>
-          <Pressable 
+          <Pressable
             style={[styles.scanButton, { backgroundColor: theme.tint }]}
             onPress={() => router.push('/staff/scanner')}
           >
@@ -48,7 +85,7 @@ export default function StaffDashboard() {
           </Pressable>
         </View>
 
-        <Pressable 
+        <Pressable
           style={styles.exitButton}
           onPress={() => {
             logout();
@@ -57,7 +94,7 @@ export default function StaffDashboard() {
         >
           <Text style={[styles.exitText, { color: theme.tabIconDefault }]}>Đăng xuất</Text>
         </Pressable>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -68,7 +105,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
-    flex: 1,
+    flexGrow: 1,
   },
   header: {
     marginBottom: 30,
@@ -94,16 +131,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
   },
   statLabel: {
     fontSize: 12,
     marginTop: 4,
+    textAlign: 'center',
   },
   mainActions: {
-    flex: 1,
     justifyContent: 'center',
+    marginBottom: 20,
   },
   scanButton: {
     height: 180,

@@ -22,7 +22,6 @@ function mapMovie(raw: BackendMovie): Movie {
     description: String(raw.description ?? raw.content ?? ''),
     releaseDate: String(raw.releaseDate ?? ''),
     isNowPlaying: status === 1,
-    isHot: Boolean(raw.isHot),
     status,
   };
 }
@@ -41,13 +40,6 @@ export const movieService = {
    */
   async getMovies() {
     return await this.getAllMovies();
-  },
-
-  /**
-   * Lấy danh sách phim Hot (Featured)
-   */
-  async getHotMovies() {
-    return (await this.getAllMovies()).filter((movie) => movie.isHot);
   },
 
   /**
