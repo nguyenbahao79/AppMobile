@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Image, Pressable, ScrollView, SafeAreaView, Platform, Alert, Switch } from 'react-native';
+import { View, StyleSheet, Image, Pressable, ScrollView, SafeAreaView, Platform, Alert } from 'react-native';
 import { useRouter, Href } from 'expo-router';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -16,9 +16,6 @@ type MenuItem = {
   color: string;
   route?: string;
   action?: () => void;
-  hasSwitch?: boolean;
-  switchValue?: boolean;
-  onSwitchChange?: (value: boolean) => void;
 };
 
 export default function ProfileScreen() {
@@ -30,8 +27,8 @@ export default function ProfileScreen() {
   const { tickets } = useTickets();
   const user = session?.user;
 
-  const [isNotificationsEnabled, setIsNotificationsEnabled] = useState(true);
-  const [isAutoDisplayMode, setIsAutoDisplayMode] = useState(true);
+  const avatarUrl = user?.avatar || 'https://images.unsplash.com/photo-1633332755192-727a05c4013d?w=400';
+  const rankName = user?.rankName || user?.membershipRankName || 'Thành viên';
 
   const menuSections: { title: string; items: MenuItem[] }[] = [
     {
@@ -39,34 +36,19 @@ export default function ProfileScreen() {
       items: [
         { icon: 'person.fill', title: 'Thông tin cá nhân', color: '#5856D6', route: '/user/edit-profile' },
         { icon: 'creditcard.fill', title: 'Phương thức thanh toán', color: '#FF9500', action: () => Alert.alert('Thông báo', 'Chức năng thanh toán sẽ sớm ra mắt.') },
-        { icon: 'ticket.fill', title: 'Lịch sử đặt vé', color: '#FF2D55', route: '/user/tickets' },
-      ]
-    },
-    {
-      title: 'Cài đặt',
-      items: [
-        { 
-          icon: 'bell.fill', 
-          title: 'Thông báo', 
-          color: '#34C759', 
-          hasSwitch: true, 
-          switchValue: isNotificationsEnabled,
-          onSwitchChange: setIsNotificationsEnabled
-        },
+        { icon: 'ticket.fill', title: 'Lịch sử đặt vé', color: '#FF2D55', route: '/user/(tabs)/tickets' },
+        { icon: 'heart.fill', title: 'Phim yêu thích', color: '#FF3B30', route: '/user/favorites' },
+        { icon: 'gift.fill', title: 'Voucher', color: '#AF52DE', route: '/user/vouchers' },
+        { icon: 'star.fill', title: 'Lịch sử điểm thưởng', color: '#FFCC00', route: '/user/points-history' },
         { icon: 'lock.fill', title: 'Bảo mật & Mật khẩu', color: '#007AFF', route: '/user/security' },
-        { 
-          icon: 'eye.fill', 
-          title: 'Chế độ hiển thị tự động', 
-          color: '#AF52DE', 
-          hasSwitch: true, 
-          switchValue: isAutoDisplayMode,
-          onSwitchChange: setIsAutoDisplayMode
-        },
       ]
     },
     {
       title: 'Khác',
       items: [
+        { icon: 'popcorn.fill', title: 'Đặt bắp nước', color: '#FF9500', route: '/user/food-order' },
+        { icon: 'mappin.and.ellipse', title: 'Hệ thống rạp', color: '#34C759', route: '/user/cinemas' },
+        { icon: 'newspaper.fill', title: 'Tin tức & Sự kiện', color: '#5856D6', route: '/user/news' },
         { icon: 'questionmark.circle.fill', title: 'Trợ giúp & Hỗ trợ', color: '#8E8E93', action: () => Alert.alert('Hỗ trợ', 'Email hỗ trợ: support@cinema.com\nHotline: 1900 1234') },
       ]
     }
@@ -79,14 +61,8 @@ export default function ProfileScreen() {
   ];
 
   const handlePress = (item: MenuItem) => {
-    if (item.hasSwitch) return; // Không làm gì nếu có switch (xử lý qua onSwitchChange)
-    
     if (item.route) {
-      if (item.route === '/user/tickets') {
-          router.push('/user/tickets' as Href); // Sẽ tự động tìm đến app/user/(tabs)/tickets.tsx
-      } else {
-          router.push(item.route as Href);
-      }
+      router.push(item.route as Href);
     } else if (item.action) {
       item.action();
     }
@@ -119,14 +95,14 @@ export default function ProfileScreen() {
         <ThemedView style={[styles.profileCard, isDark && styles.profileCardDark]}>
           <View style={styles.profileInfoContainer}>
             <Image
-              source={{ uri: 'https://images.unsplash.com/photo-1633332755192-727a05c4013d?w=400' }}
+              source={{ uri: avatarUrl }}
               style={styles.avatar}
             />
             <View style={styles.nameContainer}>
               <ThemedText type="title" style={styles.name}>{user?.fullname || user?.username || 'Khách hàng'}</ThemedText>
               <ThemedText style={styles.email}>{user?.email || user?.phone || 'Chưa cập nhật email'}</ThemedText>
-              <Pressable style={[styles.editBadge, { backgroundColor: theme.tint + '20' }]}>
-                <ThemedText style={[styles.editBadgeText, { color: theme.tint }]}>Thành viên Vàng</ThemedText>
+              <Pressable style={[styles.editBadge, { backgroundColor: theme.tint + '20' }]} onPress={() => router.push('/user/edit-profile' as Href)}>
+                <ThemedText style={[styles.editBadgeText, { color: theme.tint }]}>{rankName}</ThemedText>
               </Pressable>
             </View>
           </View>
@@ -147,12 +123,12 @@ export default function ProfileScreen() {
             <ThemedText style={styles.sectionTitle}>{section.title}</ThemedText>
             <ThemedView style={[styles.menuList, isDark && styles.menuListDark]}>
               {section.items.map((item, iIndex) => (
-                <Pressable 
-                  key={iIndex} 
+                <Pressable
+                  key={iIndex}
                   style={({ pressed }) => [
                     styles.menuItem,
                     iIndex === section.items.length - 1 && { borderBottomWidth: 0 },
-                    pressed && !item.hasSwitch && { backgroundColor: isDark ? '#2C2C2E' : '#F2F2F7' }
+                    pressed && { backgroundColor: isDark ? '#2C2C2E' : '#F2F2F7' }
                   ]}
                   onPress={() => handlePress(item)}
                 >
@@ -162,17 +138,7 @@ export default function ProfileScreen() {
                     </View>
                     <ThemedText style={styles.menuItemTitle}>{item.title}</ThemedText>
                   </View>
-                  
-                  {item.hasSwitch ? (
-                    <Switch
-                      value={item.switchValue}
-                    onValueChange={item.onSwitchChange}
-                      trackColor={{ false: '#767577', true: theme.tint }}
-                      thumbColor={Platform.OS === 'ios' ? undefined : (item.switchValue ? '#f4f3f4' : '#f4f3f4')}
-                    />
-                  ) : (
-                    <IconSymbol name="chevron.right" size={14} color={theme.tabIconDefault} />
-                  )}
+                  <IconSymbol name="chevron.right" size={14} color={theme.tabIconDefault} />
                 </Pressable>
               ))}
             </ThemedView>

@@ -47,12 +47,17 @@ export default function HomeScreen() {
     fetchMovies();
   }, []);
 
-  const numColumns = width > 600 ? 4 : 3;
+  const numColumns = width > 600 ? 4 : 2;
 
-  // Cập nhật logic lọc phim dựa trên dữ liệu Backend (Dùng ID hoặc Status)
-  const hotMovies = movies.slice(0, 3); // Giả sử 3 phim đầu là Hot
-  const nowPlaying = movies.filter(m => m.status === 1); 
+  const nowPlaying = movies.filter(m => m.status === 1);
   const upcoming = movies.filter(m => m.status !== 1);
+  // "Hot" = đang chiếu, xếp theo rating giảm dần (BE chưa có field đánh dấu phim hot riêng).
+  const hotMovies = [...nowPlaying].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 6);
+  // Slide quảng cáo dùng banner của phim mới nhất (đang chiếu hoặc sắp chiếu), giống trang chủ web.
+  const promoMovies = [...movies]
+    .filter(m => (m.status === 1 || m.status === 2) && (m.banner || m.posterUrl))
+    .sort((a, b) => String(b.releaseDate || '').localeCompare(String(a.releaseDate || '')))
+    .slice(0, 8);
 
   const filteredMovies = movies.filter(m => 
     m.title.toLowerCase().includes(search.toLowerCase())
@@ -60,11 +65,11 @@ export default function HomeScreen() {
 
   const renderHeader = () => (
     <View>
-      <PromoSlider />
+      <PromoSlider movies={promoMovies} />
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>🔥 Hot Movies</Text>
-          <Text style={[styles.seeAll, { color: theme.tint }]}>See All</Text>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>🔥 Phim nổi bật</Text>
+          <Text style={[styles.seeAll, { color: theme.tint }]}>Xem tất cả</Text>
         </View>
         <FlatList
           horizontal
@@ -79,8 +84,8 @@ export default function HomeScreen() {
       </View>
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Now Playing</Text>
-          <Text style={[styles.seeAll, { color: theme.tint }]}>See All</Text>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Đang chiếu</Text>
+          <Text style={[styles.seeAll, { color: theme.tint }]}>Xem tất cả</Text>
         </View>
         <FlatList
           horizontal
@@ -97,8 +102,8 @@ export default function HomeScreen() {
         />
       </View>
       <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>Upcoming</Text>
-        <Text style={[styles.seeAll, { color: theme.tint }]}>See All</Text>
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>Sắp chiếu</Text>
+        <Text style={[styles.seeAll, { color: theme.tint }]}>Xem tất cả</Text>
       </View>
     </View>
   );
@@ -115,10 +120,10 @@ export default function HomeScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <AppHeader 
         title={session?.user?.fullname || session?.user?.username || 'Khách hàng'}
-        subtitle="Welcome back," 
+        subtitle="Xin chào," 
         rightElement={
           <View style={{ flex: 1, marginRight: 10, minWidth: width * 0.4 }}>
-            <SearchBar value={search} onChangeText={setSearch} placeholder="Search movies..." />
+            <SearchBar value={search} onChangeText={setSearch} placeholder="Tìm phim..." />
           </View>
         }
         showNotification={true}
@@ -130,7 +135,7 @@ export default function HomeScreen() {
         numColumns={numColumns}
         key={numColumns} // Buộc re-render khi số cột thay đổi (Responsive)
         renderItem={({ item }) => (
-          <View style={styles.gridItem}>
+          <View style={[styles.gridItem, { maxWidth: `${100 / numColumns}%` }]}>
             <MovieCard movie={item} width="100%" />
           </View>
         )}
@@ -175,7 +180,6 @@ const styles = StyleSheet.create({
   },
   gridItem: {
     flex: 1,
-    maxWidth: '33.33%', // Đảm bảo không bị giãn quá rộng trên mobile
     paddingHorizontal: 5,
   },
   columnWrapper: {

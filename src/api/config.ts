@@ -72,6 +72,10 @@ export const API_ENDPOINTS = {
   STAFF_LOGIN: '/auth/staff-login',
   REGISTER: '/auth/register',
   REFRESH_TOKEN: '/auth/refresh',
+  FORGOT_PASSWORD: '/auth/forgot-password',
+  FORGOT_PASSWORD_VERIFY_OTP: '/auth/forgot-password/verify-otp',
+  FORGOT_PASSWORD_RESEND_OTP: '/auth/forgot-password/resend-otp',
+  RESET_PASSWORD: '/auth/reset-password',
   USER_DETAIL: (id: string | number) => `/users/${id}`,
   USER_PASSWORD: (id: string | number) => `/users/${id}/password`,
   
@@ -81,16 +85,40 @@ export const API_ENDPOINTS = {
   SHOWTIMES: (movieId: string | number) => `/showtimes?movieId=${movieId}`,
   SHOWTIME_DETAIL: (id: string | number) => `/showtimes/${id}`,
   SEATS_BY_ROOM: (roomId: string | number) => `/seats?roomId=${roomId}`,
+  SEAT_HOLDS_PEER: (showtimeId: string | number, excludeHolder: string) =>
+    `/showtime-seat-holds/peer?showtimeId=${showtimeId}&excludeHolder=${encodeURIComponent(excludeHolder)}`,
   PRODUCTS: '/products',
+  CINEMAS_LIST: '/cinemas',
+  CINEMA_DETAIL: (id: string | number) => `/cinemas/${id}`,
   CINEMA_PRODUCT_MENU: (cinemaId: string | number) => `/cinemas/${cinemaId}/product-menu`,
   HOLD_SEATS: '/showtime-seat-holds/refresh',
+  NEWS_LIST: '/news',
+  NEWS_DETAIL: (id: string | number) => `/news/${id}`,
   
   // BOOKING & TICKETS
   QUOTE_TICKETS: '/ticket-orders/quote',
   CHECKOUT_TICKETS: '/ticket-orders/checkout',
+  CONFIRM_PAYOS_TICKETS: '/ticket-orders/confirm-payos',
+  CANCEL_PENDING_TICKETS: '/ticket-orders/cancel-pending',
+  CHECKOUT_FOOD_ORDERS: '/food-orders/checkout',
+  CONFIRM_PAYOS_FOOD_ORDERS: '/food-orders/confirm-payos',
+  CANCEL_PENDING_FOOD_ORDERS: '/food-orders/cancel-pending',
   TICKET_QR: (qrToken: string) => `/ticket-orders/qr/${encodeURIComponent(qrToken)}`,
   MY_TRANSACTIONS: '/me/transactions',
   MY_FAVORITES: '/me/favorites',
+  FAVORITE_BY_MOVIE: (movieId: string | number) => `/me/favorites/${movieId}`,
+  MOVIE_REVIEW_BY_MOVIE: (movieId: string | number) => `/me/movie-reviews/${movieId}`,
+  MY_VOUCHERS: '/me/vouchers',
+  REDEEM_VOUCHER: '/me/vouchers/redeem',
+  POINTS_HISTORY: '/me/points-history',
+  VOUCHERS_LIST: '/vouchers',
   TICKET_DETAIL: (id: string) => `/staff/dashboard-stats/orders/${encodeURIComponent(id)}`,
   VERIFY_TICKET: '/staff/verify-ticket',
+
+  // STAFF DASHBOARD
+  STAFF_DASHBOARD_STATS: '/staff/dashboard-stats',
+
+  // STAFF SELF-SERVICE
+  STAFF_ME: '/staff/me',
+  STAFF_ME_PASSWORD: '/staff/me/password',
 };

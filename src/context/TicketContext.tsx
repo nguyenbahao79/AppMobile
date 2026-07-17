@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, ReactNode, useCallback, use
 import { apiClient } from '@/api/client';
 import { API_ENDPOINTS, BASE_URL } from '@/api/config';
 import { useAuth } from '@/context/AuthContext';
+import { bookingService } from '@/services/bookingService';
 
 export interface Ticket {
   id: string;
@@ -20,6 +21,10 @@ export interface Ticket {
   ticketCode?: string;
   roomName?: string;
   cinemaName?: string;
+  cinemaAddress?: string;
+  /** Trạng thái gốc từ BE ('pending' | 'completed' | 'cancelled' | ...) — dùng để quyết định có cho hủy hay không. */
+  rawStatus?: string;
+  payosOrderCode?: number;
 }
 
 type TransactionItem = {
@@ -35,6 +40,7 @@ type TransactionItem = {
   seatLabel?: string;
   roomName?: string;
   cinemaName?: string;
+  cinemaAddress?: string;
 };
 
 type Transaction = {
@@ -107,6 +113,8 @@ export function TicketProvider({ children }: { children: ReactNode }) {
                 bookingDate,
                 status: transaction.status === 'cancelled' ? 'cancelled' : 'active',
                 qrCode: '',
+                rawStatus: transaction.status,
+                payosOrderCode: Number(transaction.orderCode) || undefined,
               } as Ticket];
             }
 
@@ -130,6 +138,9 @@ export function TicketProvider({ children }: { children: ReactNode }) {
               ticketCode: String(transaction.orderCode || firstTicket.ticketCode || ''),
               roomName: firstTicket.roomName,
               cinemaName: firstTicket.cinemaName,
+              cinemaAddress: firstTicket.cinemaAddress,
+              rawStatus: transaction.status,
+              payosOrderCode: Number(transaction.orderCode) || undefined,
             } as Ticket;
           })
           .flat();
@@ -158,13 +169,14 @@ export function TicketProvider({ children }: { children: ReactNode }) {
   };
 
   const cancelTicket = async (id: string) => {
-    try {
-      // Gọi API hủy vé nếu backend hỗ trợ
-      // await apiClient.put(`/bookings/cancel/${id}`, {});
-      setTickets((prev) => prev.map(t => t.id === id ? { ...t, status: 'cancelled' } : t));
-    } catch (error) {
-      console.error('Failed to cancel ticket on backend:', error);
+    const ticket = tickets.find((t) => t.id === id);
+    if (!ticket) return;
+    if (ticket.rawStatus !== 'pending' || !ticket.payosOrderCode) {
+      // Chỉ đơn đang chờ thanh toán (pending) mới hủy được — khớp với BE (cancel-pending).
+      throw new Error('Chỉ có thể hủy đơn đang chờ thanh toán.');
     }
+    await bookingService.cancelPendingOrder(ticket.payosOrderCode);
+    setTickets((prev) => prev.map(t => t.id === id ? { ...t, status: 'cancelled' } : t));
   };
 
   return (
