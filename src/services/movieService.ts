@@ -55,5 +55,10 @@ export const movieService = {
   async getMovieDetail(id: string) {
     const data = await apiClient.get(API_ENDPOINTS.MOVIE_DETAIL(id));
     return mapMovie((data ?? {}) as BackendMovie);
-  }
+  },
+
+  async getMovieReviews(id: string | number) {
+    const data = await apiClient.get(API_ENDPOINTS.MOVIE_REVIEWS(id));
+    return Array.isArray(data) ? (data as Record<string, unknown>[]) : [];
+  },
 };

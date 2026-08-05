@@ -1,368 +1,477 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, Pressable, Modal, ScrollView, Alert } from 'react-native';
-// Note: expo-camera needs to be installed via npx expo install expo-camera
-// If not installed, this code will show a placeholder UI
+import {
+  StyleSheet, Text, View, TouchableOpacity, ScrollView, ActivityIndicator,
+} from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { IconSymbol } from '@/components/base/icon-symbol';
-
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Stack } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { apiClient } from '@/api/client';
 import { API_ENDPOINTS } from '@/api/config';
+import { useAuth } from '@/context/AuthContext';
 
+const NAVY   = '#0d0d2b';
+const CARD   = '#14143a';
+const PURPLE = '#8b00ff';
+const PINK   = '#ff2d78';
+const YELLOW = '#d4ff00';
+const WHITE  = '#f0f0ff';
+const MUTED  = 'rgba(240,240,255,0.5)';
+const BORDER = 'rgba(255,255,255,0.1)';
+const GREEN  = '#00d68f';
+
+const FRAME_SIZE   = 250;
+const CORNER_SIZE  = 32;
+const CORNER_THICK = 4;
+
+type TicketInfo = {
+  movieTitle?: string;
+  showtime?: string;
+  roomName?: string;
+  seatNumber?: string;
+  seatTypeName?: string;
+};
+type FoodInfo = { productName?: string; quantity?: number };
 type ScannedOrder = {
   orderCode: string;
   customerName?: string;
   status?: number;
   finalAmount?: number;
-  paymentMethod?: string;
-  tickets?: {
-    movieTitle?: string;
-    showtime?: string;
-    roomName?: string;
-    seatNumber?: string;
-    seatTypeName?: string;
-    price?: number;
-  }[];
-  foods?: {
-    productName?: string;
-    quantity?: number;
-    price?: number;
-  }[];
+  tickets?: TicketInfo[];
+  foods?: FoodInfo[];
 };
 
+type Phase =
+  | { name: 'idle' }
+  | { name: 'scanning' }
+  | { name: 'success'; data: ScannedOrder }
+  | { name: 'error'; message: string };
+
+/* ── Info row helper ── */
+function InfoRow({ label, value }: { label: string; value?: string | number | null }) {
+  if (value == null || value === '') return null;
+  return (
+    <View style={ir.row}>
+      <Text style={ir.label}>{label}</Text>
+      <Text style={ir.value}>{String(value)}</Text>
+    </View>
+  );
+}
+const ir = StyleSheet.create({
+  row: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: BORDER,
+  },
+  label: { fontSize: 12, fontWeight: '600', color: MUTED },
+  value: { fontSize: 14, fontWeight: '700', color: WHITE, maxWidth: '60%', textAlign: 'right' },
+});
+
+/* ════════════════════ MAIN ════════════════════ */
 export default function QRScannerScreen() {
+  const { session } = useAuth();
   const [permission, requestPermission] = useCameraPermissions();
+  const [phase, setPhase] = useState<Phase>({ name: 'idle' });
   const [scanned, setScanned] = useState(false);
-  const [ticketData, setTicketData] = useState<ScannedOrder | null>(null);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
-  const colorScheme = useColorScheme();
-  const theme = Colors[colorScheme ?? 'light'];
 
-  if (!permission) {
-    return <View style={[styles.container, { backgroundColor: theme.background }]} />;
-  }
+  const staffName   = session?.staff?.fullname  || 'Nhân viên';
+  const cinemaName  = session?.staff?.cinemaName || '';
 
-  if (!permission.granted) {
-    return (
-      <View style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', padding: 24 }]}>
-        <Text style={[styles.message, { color: theme.text }]}>Ứng dụng cần quyền camera để quét mã QR.</Text>
-        <Pressable style={[styles.permissionButton, { backgroundColor: theme.tint }]} onPress={requestPermission}>
-          <Text style={styles.permissionButtonText}>Cho phép camera</Text>
-        </Pressable>
-      </View>
-    );
-  }
+  const startScan = () => {
+    setScanned(false);
+    setPhase({ name: 'scanning' });
+  };
+
+  const reset = () => {
+    setScanned(false);
+    setPhase({ name: 'idle' });
+  };
 
   const handleBarcodeScanned = async ({ data }: { data: string }) => {
     if (scanned) return;
     setScanned(true);
-    
     try {
       const response = await apiClient.post(API_ENDPOINTS.VERIFY_TICKET, { qrToken: data.trim() });
-      if (response) {
-        const verified = response as {
-          orderCode?: string;
-          ticketCode?: string;
-          customerName?: string;
-          status?: number;
-          movieTitle?: string;
-          showtime?: string;
-          roomName?: string;
-          seatNumber?: string;
-        };
-        setTicketData({
-          orderCode: verified.orderCode || verified.ticketCode || '—',
-          customerName: verified.customerName,
-          status: verified.status,
+      const r = (response ?? {}) as Record<string, any>;
+      setPhase({
+        name: 'success',
+        data: {
+          orderCode: String(r.orderCode || r.ticketCode || '—'),
+          customerName: r.customerName,
+          status: r.status,
+          finalAmount: r.finalAmount,
           tickets: [{
-            movieTitle: verified.movieTitle,
-            showtime: verified.showtime,
-            roomName: verified.roomName,
-            seatNumber: verified.seatNumber,
+            movieTitle: r.movieTitle,
+            showtime: r.showtime,
+            roomName: r.roomName,
+            seatNumber: r.seatNumber,
+            seatTypeName: r.seatTypeName,
           }],
-        });
-        setModalVisible(true);
-      }
+          foods: Array.isArray(r.foods) ? r.foods : [],
+        },
+      });
     } catch (error: any) {
-      const message = error.message || 'Không tìm thấy thông tin vé này.';
-      const isAuthError = /chưa đăng nhập|token|quyền truy cập|unauthor/i.test(message);
-      Alert.alert(isAuthError ? 'Phiên nhân viên không hợp lệ' : 'Lỗi mã QR',
-        isAuthError ? 'Vui lòng đăng xuất và đăng nhập lại bằng chế độ Nhân viên trước khi quét QR.' : message, [
-        { text: 'Quét lại', onPress: () => setScanned(false) }
-      ]);
+      setPhase({ name: 'error', message: error.message || 'Không tìm thấy thông tin vé này.' });
     }
   };
 
-  const verifyTicket = async () => {
-    if (!ticketData) return;
-    setIsVerifying(true);
-    Alert.alert(
-      'Đã kiểm tra thông tin',
-      'BE hiện chưa có API lưu trạng thái đã soát vé, nên app chỉ xác nhận hiển thị thông tin đơn.',
-      [{ text: 'Quét tiếp', onPress: () => { setModalVisible(false); setScanned(false); } }]
-    );
-    setIsVerifying(false);
-  };
-
-  return (
-    <View style={styles.container}>
-      <CameraView
-        style={StyleSheet.absoluteFillObject}
-        onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
-        barcodeScannerSettings={{
-          barcodeTypes: ['qr'],
-        }}
-      >
-        <View style={styles.overlay}>
-          <View style={styles.unfocusedContainer} />
-          <View style={styles.middleContainer}>
-            <View style={styles.unfocusedContainer} />
-            <View style={styles.focusedContainer}>
-              <View style={styles.cornerTopLeft} />
-              <View style={styles.cornerTopRight} />
-              <View style={styles.cornerBottomLeft} />
-              <View style={styles.cornerBottomRight} />
-            </View>
-            <View style={styles.unfocusedContainer} />
-          </View>
-          <View style={styles.unfocusedContainer}>
-            <Text style={styles.scanText}>Đưa mã QR đơn vé vào khung quét</Text>
-          </View>
+  /* ── Camera permission loading ── */
+  if (!permission) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={YELLOW} />
         </View>
-      </CameraView>
+      </SafeAreaView>
+    );
+  }
 
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.background }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>Thông tin đơn vé</Text>
-              <Pressable onPress={() => { setModalVisible(false); setScanned(false); }}>
-                <IconSymbol name="xmark" size={24} color={theme.text} />
-              </Pressable>
+  /* ── Camera not granted ── */
+  if (!permission.granted) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={styles.topBar}>
+          <View style={styles.topBadge}>
+            <Ionicons name="shield-checkmark" size={13} color={YELLOW} />
+            <Text style={styles.topBadgeText}>NHÂN VIÊN SOÁT VÉ</Text>
+          </View>
+          <Text style={styles.staffNameText}>{staffName}</Text>
+        </View>
+        <View style={styles.center}>
+          <Ionicons name="camera-outline" size={60} color={MUTED} />
+          <Text style={styles.permText}>Ứng dụng cần quyền camera để quét mã QR vé</Text>
+          <TouchableOpacity style={styles.primaryBtn} onPress={requestPermission}>
+            <Ionicons name="camera" size={16} color="#fff" />
+            <Text style={styles.primaryBtnText}>Cho phép camera</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  /* ════ PHASE: SCANNING ════ */
+  if (phase.name === 'scanning') {
+    return (
+      <View style={{ flex: 1, backgroundColor: NAVY }}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <CameraView
+          style={StyleSheet.absoluteFillObject}
+          onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
+          barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+        >
+          <SafeAreaView style={{ flex: 1 }}>
+            {/* Top bar */}
+            <View style={styles.topBar}>
+              <View style={styles.topBadge}>
+                <Ionicons name="shield-checkmark" size={13} color={YELLOW} />
+                <Text style={styles.topBadgeText}>ĐANG QUÉT</Text>
+              </View>
+              <TouchableOpacity style={styles.cancelBtn} onPress={reset}>
+                <Ionicons name="close" size={16} color={WHITE} />
+                <Text style={styles.cancelBtnText}>Huỷ</Text>
+              </TouchableOpacity>
             </View>
 
-            {ticketData && (
-              <ScrollView showsVerticalScrollIndicator={false}>
-                <View style={[styles.statusBadge, { backgroundColor: ticketData.status === 1 ? '#4CD964' : '#FF9500' }]}>
-                  <Text style={styles.statusBadgeText}>{ticketData.status === 1 ? 'ĐÃ THANH TOÁN' : 'CHƯA HOÀN TẤT'}</Text>
+            {/* QR frame */}
+            <View style={styles.frameWrap}>
+              <View style={styles.darkBand} />
+              <View style={styles.frameRow}>
+                <View style={styles.darkBand} />
+                <View style={styles.frameBox}>
+                  <View style={[styles.corner, styles.cTL]} />
+                  <View style={[styles.corner, styles.cTR]} />
+                  <View style={[styles.corner, styles.cBL]} />
+                  <View style={[styles.corner, styles.cBR]} />
+                  {scanned && <ActivityIndicator size="large" color={YELLOW} />}
                 </View>
-
-                <View style={styles.ticketDetailSection}>
-                  <Text style={[styles.detailLabel, { color: theme.tabIconDefault }]}>MÃ ĐƠN</Text>
-                  <Text style={[styles.detailValue, { color: theme.text }]}>{ticketData.orderCode}</Text>
+                <View style={styles.darkBand} />
+              </View>
+              <View style={[styles.darkBand, { justifyContent: 'center', alignItems: 'center' }]}>
+                <View style={styles.hintRow}>
+                  <Ionicons name="scan-outline" size={16} color={YELLOW} />
+                  <Text style={styles.hintText}>Đưa mã QR vé vào khung quét</Text>
                 </View>
+              </View>
+            </View>
+          </SafeAreaView>
+        </CameraView>
+      </View>
+    );
+  }
 
-                <View style={styles.ticketDetailSection}>
-                  <Text style={[styles.detailLabel, { color: theme.tabIconDefault }]}>KHÁCH HÀNG</Text>
-                  <Text style={[styles.detailValue, { color: theme.text }]}>{ticketData.customerName}</Text>
-                </View>
+  /* ════ PHASE: IDLE ════ */
+  if (phase.name === 'idle') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Stack.Screen options={{ headerShown: false }} />
 
-                {(ticketData.tickets ?? []).map((ticket, index) => (
-                  <View key={`${ticket.seatNumber}-${index}`} style={styles.ticketDetailSection}>
-                    <Text style={[styles.detailLabel, { color: theme.tabIconDefault }]}>VÉ {index + 1}</Text>
-                    <Text style={[styles.detailValue, { color: theme.text }]}>{ticket.movieTitle}</Text>
-                    <Text style={[styles.detailSubValue, { color: theme.tabIconDefault }]}>
-                      {ticket.showtime} • {ticket.roomName} • Ghế {ticket.seatNumber}
-                    </Text>
-                  </View>
-                ))}
+        {/* Top bar */}
+        <View style={styles.topBar}>
+          <View style={styles.topBadge}>
+            <Ionicons name="shield-checkmark" size={13} color={YELLOW} />
+            <Text style={styles.topBadgeText}>NHÂN VIÊN SOÁT VÉ</Text>
+          </View>
+          <Text style={styles.staffNameText}>{staffName}</Text>
+        </View>
 
-                <View style={styles.extrasSection}>
-                  <Text style={[styles.detailLabel, { color: theme.tabIconDefault }]}>BẮP NƯỚC</Text>
-                  {(ticketData.foods ?? []).map((food, i) => (
-                    <View key={i} style={styles.extraItem}>
-                      <IconSymbol name="popcorn.fill" size={16} color={theme.tint} />
-                      <Text style={[styles.extraText, { color: theme.text }]}>
-                        {food.productName} x{food.quantity}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
+        {/* Idle content */}
+        <View style={styles.idleContent}>
+          {/* Icon */}
+          <View style={styles.qrIconWrap}>
+            <Ionicons name="qr-code" size={80} color={YELLOW} />
+          </View>
 
-                <Pressable 
-                  style={[
-                    styles.verifyButton, 
-                    { backgroundColor: ticketData.status === 1 ? theme.tint : theme.tabIconDefault }
-                  ]}
-                  onPress={verifyTicket}
-                  disabled={ticketData.status !== 1 || isVerifying}
-                >
-                  <Text style={styles.verifyButtonText}>
-                    {isVerifying ? 'Đang xử lý...' : ticketData.status === 1 ? 'Xác nhận đã kiểm tra' : 'Đơn chưa thanh toán'}
-                  </Text>
-                </Pressable>
-              </ScrollView>
+          <Text style={styles.idleTitle}>Soát vé bằng mã QR</Text>
+          <Text style={styles.idleSub}>
+            Nhấn nút bên dưới để mở camera và quét mã QR trên vé của khách hàng.
+          </Text>
+
+          {/* Staff info card */}
+          <View style={styles.staffCard}>
+            <View style={styles.staffCardRow}>
+              <Ionicons name="person-circle-outline" size={16} color={MUTED} />
+              <Text style={styles.staffCardText}>{staffName}</Text>
+            </View>
+            {!!cinemaName && (
+              <View style={styles.staffCardRow}>
+                <Ionicons name="business-outline" size={16} color={MUTED} />
+                <Text style={styles.staffCardText}>{cinemaName}</Text>
+              </View>
             )}
           </View>
+
+          {/* Start scan button */}
+          <TouchableOpacity style={styles.scanBtn} onPress={startScan} activeOpacity={0.85}>
+            <Ionicons name="qr-code-outline" size={20} color="#fff" />
+            <Text style={styles.scanBtnText}>Bắt đầu quét mã QR</Text>
+          </TouchableOpacity>
         </View>
-      </Modal>
-    </View>
+      </SafeAreaView>
+    );
+  }
+
+  /* ════ PHASE: SUCCESS / ERROR ════ */
+  const isSuccess = phase.name === 'success';
+  const isPaid    = isSuccess && phase.data.status === 1;
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <Stack.Screen options={{ headerShown: false }} />
+
+      {/* Top bar */}
+      <View style={styles.topBar}>
+        <View style={[styles.topBadge, { backgroundColor: isSuccess && isPaid ? 'rgba(0,214,143,0.12)' : isSuccess ? 'rgba(255,45,120,0.12)' : 'rgba(255,45,120,0.12)', borderColor: isSuccess && isPaid ? 'rgba(0,214,143,0.25)' : 'rgba(255,45,120,0.25)' }]}>
+          <Ionicons
+            name={isSuccess && isPaid ? 'checkmark-circle' : 'close-circle'}
+            size={13}
+            color={isSuccess && isPaid ? GREEN : PINK}
+          />
+          <Text style={[styles.topBadgeText, { color: isSuccess && isPaid ? GREEN : PINK }]}>
+            {isSuccess && isPaid ? 'ĐÃ XÁC NHẬN' : 'KHÔNG HỢP LỆ'}
+          </Text>
+        </View>
+        <TouchableOpacity style={styles.cancelBtn} onPress={reset}>
+          <Ionicons name="close" size={16} color={WHITE} />
+          <Text style={styles.cancelBtnText}>Đóng</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
+
+        {/* ── Success ── */}
+        {isSuccess && (
+          <>
+            <View style={[styles.resultBadge, { backgroundColor: isPaid ? GREEN : PINK }]}>
+              <Ionicons name={isPaid ? 'checkmark-circle' : 'close-circle'} size={16} color="#fff" />
+              <Text style={styles.resultBadgeText}>{isPaid ? 'ĐÃ THANH TOÁN' : 'CHƯA HOÀN TẤT'}</Text>
+            </View>
+
+            <Text style={styles.orderCode}>{phase.data.orderCode}</Text>
+
+            {/* Customer info */}
+            <View style={styles.infoCard}>
+              <View style={styles.cardHead}>
+                <Ionicons name="person-outline" size={13} color={PURPLE} />
+                <Text style={styles.cardHeadText}>THÔNG TIN ĐƠN</Text>
+              </View>
+              <InfoRow label="Khách hàng" value={phase.data.customerName} />
+              {phase.data.finalAmount != null && (
+                <InfoRow label="Tổng tiền" value={phase.data.finalAmount.toLocaleString('vi-VN') + '₫'} />
+              )}
+            </View>
+
+            {/* Tickets */}
+            {(phase.data.tickets ?? []).filter((t) => t.movieTitle).map((t, i) => (
+              <View key={i} style={[styles.infoCard, { borderColor: 'rgba(139,0,255,0.25)' }]}>
+                <View style={styles.cardHead}>
+                  <Ionicons name="film-outline" size={13} color={PURPLE} />
+                  <Text style={styles.cardHeadText}>VÉ {i + 1}</Text>
+                </View>
+                <Text style={styles.movieTitle}>{t.movieTitle}</Text>
+                <InfoRow label="Suất chiếu" value={t.showtime} />
+                <InfoRow label="Phòng chiếu" value={t.roomName} />
+                <InfoRow
+                  label="Ghế ngồi"
+                  value={t.seatNumber
+                    ? t.seatNumber + (t.seatTypeName ? ` (${t.seatTypeName})` : '')
+                    : undefined}
+                />
+              </View>
+            ))}
+
+            {/* Foods */}
+            {(phase.data.foods ?? []).length > 0 && (
+              <View style={[styles.infoCard, { borderColor: 'rgba(212,255,0,0.2)' }]}>
+                <View style={styles.cardHead}>
+                  <Ionicons name="fast-food-outline" size={13} color={YELLOW} />
+                  <Text style={[styles.cardHeadText, { color: YELLOW }]}>BẮP NƯỚC</Text>
+                </View>
+                {(phase.data.foods ?? []).map((f, i) => (
+                  <Text key={i} style={styles.foodItem}>• {f.productName} x{f.quantity}</Text>
+                ))}
+              </View>
+            )}
+          </>
+        )}
+
+        {/* ── Error ── */}
+        {!isSuccess && (
+          <View style={styles.errorBlock}>
+            <View style={styles.errorIconWrap}>
+              <Ionicons name="warning" size={44} color={PINK} />
+            </View>
+            <Text style={styles.errorTitle}>Không xác thực được</Text>
+            <Text style={styles.errorMsg}>{(phase as any).message}</Text>
+          </View>
+        )}
+
+        {/* Next scan button */}
+        <TouchableOpacity style={styles.scanBtn} onPress={startScan} activeOpacity={0.85}>
+          <Ionicons name="qr-code-outline" size={18} color="#fff" />
+          <Text style={styles.scanBtnText}>Quét vé tiếp theo</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  overlay: {
-    flex: 1,
-  },
-  unfocusedContainer: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  middleContainer: {
-    flexDirection: 'row',
-    height: 250,
-  },
-  focusedContainer: {
-    width: 250,
-    position: 'relative',
-  },
-  cornerTopLeft: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: 30,
-    height: 30,
-    borderTopWidth: 4,
-    borderLeftWidth: 4,
-    borderColor: '#FFF',
-  },
-  cornerTopRight: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 30,
-    height: 30,
-    borderTopWidth: 4,
-    borderRightWidth: 4,
-    borderColor: '#FFF',
-  },
-  cornerBottomLeft: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    width: 30,
-    height: 30,
-    borderBottomWidth: 4,
-    borderLeftWidth: 4,
-    borderColor: '#FFF',
-  },
-  cornerBottomRight: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 30,
-    height: 30,
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-    borderColor: '#FFF',
-  },
-  scanText: {
-    color: '#FFF',
-    fontSize: 16,
-    marginTop: 20,
-  },
-  message: {
-    textAlign: 'center',
-    paddingBottom: 20,
-    fontSize: 16,
-  },
-  permissionButton: {
-    paddingHorizontal: 25,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  permissionButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    height: '80%',
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    padding: 24,
-  },
-  modalHeader: {
+  container: { flex: 1, backgroundColor: NAVY },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 36 },
+
+  /* Top bar */
+  topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+    backgroundColor: NAVY,
   },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
+  topBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(212,255,0,0.1)',
+    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5,
+    borderWidth: 1, borderColor: 'rgba(212,255,0,0.2)',
   },
-  statusBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    marginBottom: 20,
+  topBadgeText: { fontSize: 10, fontWeight: '800', color: YELLOW, letterSpacing: 1 },
+  staffNameText: { fontSize: 13, fontWeight: '700', color: WHITE },
+  cancelBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6,
+    borderWidth: 1, borderColor: BORDER,
   },
-  statusBadgeText: {
-    color: '#FFF',
-    fontWeight: 'bold',
-    fontSize: 14,
+  cancelBtnText: { fontSize: 12, fontWeight: '700', color: WHITE },
+
+  /* Permission */
+  permText: {
+    color: MUTED, fontSize: 14, textAlign: 'center',
+    marginTop: 18, lineHeight: 22, marginBottom: 28,
   },
-  ticketDetailSection: {
-    marginBottom: 15,
+  primaryBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: PURPLE, borderRadius: 12,
+    paddingVertical: 13, paddingHorizontal: 28,
   },
-  detailLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 4,
+  primaryBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+
+  /* Idle */
+  idleContent: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
+  qrIconWrap: {
+    width: 140, height: 140, borderRadius: 70,
+    backgroundColor: 'rgba(212,255,0,0.06)',
+    borderWidth: 2, borderColor: 'rgba(212,255,0,0.15)',
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 28,
   },
-  detailValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
+  idleTitle: { fontSize: 22, fontWeight: '800', color: WHITE, marginBottom: 12, textAlign: 'center' },
+  idleSub: { fontSize: 14, color: MUTED, textAlign: 'center', lineHeight: 22, marginBottom: 28 },
+  staffCard: {
+    backgroundColor: CARD,
+    borderRadius: 12, borderWidth: 1, borderColor: BORDER,
+    paddingVertical: 14, paddingHorizontal: 20,
+    alignSelf: 'stretch', marginBottom: 28, gap: 8,
   },
-  detailSubValue: {
-    fontSize: 13,
-    marginTop: 4,
+  staffCardRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  staffCardText: { fontSize: 13, fontWeight: '600', color: MUTED },
+  scanBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: PURPLE, borderRadius: 14,
+    paddingVertical: 15, paddingHorizontal: 32,
+    alignSelf: 'stretch',
+    shadowColor: PURPLE, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8,
+    elevation: 6,
   },
-  extrasSection: {
-    marginTop: 10,
-    paddingTop: 15,
-    borderTopWidth: 1,
-    borderTopColor: '#333',
-    marginBottom: 30,
+  scanBtnText: { fontSize: 16, fontWeight: '800', color: '#fff' },
+
+  /* Camera QR frame */
+  frameWrap: { flex: 1 },
+  darkBand: { flex: 1, backgroundColor: 'rgba(0,0,0,0.62)' },
+  frameRow: { flexDirection: 'row', height: FRAME_SIZE },
+  frameBox: { width: FRAME_SIZE, alignItems: 'center', justifyContent: 'center' },
+  corner: { position: 'absolute', width: CORNER_SIZE, height: CORNER_SIZE },
+  cTL: { top: 0, left: 0, borderTopWidth: CORNER_THICK, borderLeftWidth: CORNER_THICK, borderColor: YELLOW, borderTopLeftRadius: 4 },
+  cTR: { top: 0, right: 0, borderTopWidth: CORNER_THICK, borderRightWidth: CORNER_THICK, borderColor: YELLOW, borderTopRightRadius: 4 },
+  cBL: { bottom: 0, left: 0, borderBottomWidth: CORNER_THICK, borderLeftWidth: CORNER_THICK, borderColor: YELLOW, borderBottomLeftRadius: 4 },
+  cBR: { bottom: 0, right: 0, borderBottomWidth: CORNER_THICK, borderRightWidth: CORNER_THICK, borderColor: YELLOW, borderBottomRightRadius: 4 },
+  hintRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: 'rgba(212,255,0,0.08)',
+    borderRadius: 10, paddingHorizontal: 16, paddingVertical: 8,
+    borderWidth: 1, borderColor: 'rgba(212,255,0,0.15)',
   },
-  extraItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 4,
+  hintText: { fontSize: 13, fontWeight: '700', color: YELLOW },
+
+  /* Result */
+  resultBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    alignSelf: 'flex-start', borderRadius: 8,
+    paddingHorizontal: 12, paddingVertical: 6, marginBottom: 12,
   },
-  extraText: {
-    marginLeft: 10,
-    fontSize: 16,
+  resultBadgeText: { fontSize: 12, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
+  orderCode: { fontSize: 24, fontWeight: '900', color: WHITE, marginBottom: 16, letterSpacing: 1 },
+
+  infoCard: {
+    backgroundColor: CARD, borderRadius: 12,
+    paddingHorizontal: 14, paddingTop: 4, paddingBottom: 4,
+    marginBottom: 12, borderWidth: 1, borderColor: BORDER,
   },
-  verifyButton: {
-    height: 56,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
+  cardHead: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10 },
+  cardHeadText: { fontSize: 11, fontWeight: '800', color: PURPLE, letterSpacing: 1 },
+  movieTitle: { fontSize: 16, fontWeight: '800', color: WHITE, paddingBottom: 6 },
+  foodItem: { fontSize: 13, color: MUTED, paddingVertical: 4 },
+
+  errorBlock: { alignItems: 'center', paddingVertical: 32 },
+  errorIconWrap: {
+    width: 96, height: 96, borderRadius: 48,
+    backgroundColor: 'rgba(255,45,120,0.1)',
+    borderWidth: 2, borderColor: 'rgba(255,45,120,0.2)',
+    alignItems: 'center', justifyContent: 'center', marginBottom: 20,
   },
-  verifyButtonText: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
+  errorTitle: { fontSize: 20, fontWeight: '800', color: WHITE, marginBottom: 10 },
+  errorMsg: { fontSize: 14, color: MUTED, textAlign: 'center', lineHeight: 22, marginBottom: 28 },
 });

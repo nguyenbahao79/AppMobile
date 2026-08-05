@@ -1,43 +1,68 @@
-import { Stack } from 'expo-router';
+import { Tabs } from 'expo-router';
 import React from 'react';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { HapticTab } from '@/components/base/haptic-tab';
 
-export default function StaffLayout() {
-  const colorScheme = useColorScheme();
-  const theme = Colors[colorScheme ?? 'light'];
+const CARD   = '#14143a';
+const YELLOW = '#d4ff00';
+const MUTED  = 'rgba(240,240,255,0.35)';
+const BORDER = 'rgba(255,255,255,0.08)';
 
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+
+function TabIcon({ name, nameActive, color, focused }: {
+  name: IoniconName; nameActive: IoniconName; color: string; focused: boolean;
+}) {
+  return <Ionicons name={focused ? nameActive : name} size={24} color={color} />;
+}
+
+export default function StaffTabLayout() {
   return (
-    <Stack
+    <Tabs
       screenOptions={{
-        headerStyle: {
-          backgroundColor: theme.background,
+        headerShown: false,
+        tabBarButton: HapticTab,
+        tabBarActiveTintColor: YELLOW,
+        tabBarInactiveTintColor: MUTED,
+        tabBarStyle: {
+          backgroundColor: CARD,
+          borderTopWidth: 1,
+          borderTopColor: BORDER,
+          height: Platform.OS === 'ios' ? 84 : 64,
+          paddingBottom: Platform.OS === 'ios' ? 24 : 8,
+          paddingTop: 8,
+          elevation: 0,
+          shadowOpacity: 0,
         },
-        headerTintColor: theme.tint,
-        headerTitleStyle: {
-          fontWeight: 'bold',
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '700',
+          letterSpacing: 0.3,
+          marginTop: 2,
         },
-      }}>
-      <Stack.Screen
-        name="index"
-        options={{
-          title: 'Staff Dashboard',
-        }}
-      />
-      <Stack.Screen
+        tabBarBackground: () => null,
+      }}
+    >
+      <Tabs.Screen name="index" options={{ href: null }} />
+      <Tabs.Screen
         name="scanner"
         options={{
-          title: 'Scan QR Ticket',
-          headerShown: true,
+          title: 'Soát vé',
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name="qr-code-outline" nameActive="qr-code" color={color} focused={focused} />
+          ),
         }}
       />
-      <Stack.Screen
+      <Tabs.Screen
         name="profile"
         options={{
-          title: 'Hồ sơ nhân viên',
-          headerShown: true,
+          title: 'Cá nhân',
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name="person-outline" nameActive="person" color={color} focused={focused} />
+          ),
         }}
       />
-    </Stack>
+    </Tabs>
   );
 }
