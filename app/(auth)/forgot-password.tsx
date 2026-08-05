@@ -13,7 +13,7 @@ export default function ForgotPasswordScreen() {
 
   const handleSubmit = async () => {
     if (!identifier.trim()) {
-      Alert.alert('Thông báo', 'Vui lòng nhập tên đăng nhập hoặc email.');
+      Alert.alert('Thông báo', 'Vui lòng nhập email hoặc số điện thoại.');
       return;
     }
     setLoading(true);
@@ -41,14 +41,14 @@ export default function ForgotPasswordScreen() {
           <View style={styles.header}>
             <ThemedText type="title" style={styles.title}>Quên mật khẩu</ThemedText>
             <ThemedText style={styles.subtitle}>
-              Dùng được cho cả tài khoản khách hàng và nhân viên. Nhập tên đăng nhập hoặc email để nhận mã xác nhận.
+              Dùng được cho cả tài khoản khách hàng và nhân viên. Nhập email hoặc số điện thoại để nhận mã xác nhận.
             </ThemedText>
           </View>
 
           <View style={styles.form}>
             <AuthInput
-              label="Tên đăng nhập / Email"
-              placeholder="Nhập username hoặc email"
+              label="Email / Số điện thoại"
+              placeholder="Nhập email hoặc số điện thoại"
               value={identifier}
               onChangeText={setIdentifier}
               keyboardType="email-address"

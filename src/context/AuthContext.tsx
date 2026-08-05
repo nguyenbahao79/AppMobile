@@ -13,8 +13,8 @@ import { isJwtExpired } from '@/utils/jwt';
 type AuthContextValue = {
   session: AuthResponse | null;
   isRestoring: boolean;
-  login: (username: string, password: string) => Promise<AuthResponse>;
-  loginStaff: (username: string, password: string) => Promise<AuthResponse>;
+  login: (account: string, password: string) => Promise<AuthResponse>;
+  loginStaff: (account: string, password: string) => Promise<AuthResponse>;
   logout: () => Promise<void>;
   updateSessionUser: (user: NonNullable<AuthResponse['user']>) => void;
   updateSessionStaff: (staff: NonNullable<AuthResponse['staff']>) => void;
@@ -60,19 +60,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextValue>(() => ({
     session,
     isRestoring,
-    async login(username, password) {
+    async login(account, password) {
       let response: AuthResponse;
       try {
-        response = await authService.login({ username, password });
+        response = await authService.login({ account, password });
       } catch {
-        response = await authService.staffLogin({ username, password });
+        response = await authService.staffLogin({ account, password });
       }
       await persistSession(response);
       setSession(response);
       return response;
     },
-    async loginStaff(username, password) {
-      const response = await authService.staffLogin({ username, password });
+    async loginStaff(account, password) {
+      const response = await authService.staffLogin({ account, password });
       await persistSession(response);
       setSession(response);
       return response;

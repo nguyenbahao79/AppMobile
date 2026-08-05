@@ -19,7 +19,7 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!username.trim() || !password) {
-      Alert.alert('Thông báo', 'Vui lòng nhập đầy đủ tên đăng nhập/email và mật khẩu.');
+      Alert.alert('Thông báo', 'Vui lòng nhập đầy đủ email/số điện thoại và mật khẩu.');
       return;
     }
 
@@ -70,8 +70,8 @@ export default function LoginScreen() {
 
           <View style={styles.form}>
             <AuthInput
-              label={isStaffLogin ? 'Tên đăng nhập / Email nhân viên' : 'Tên đăng nhập / Email'}
-              placeholder={isStaffLogin ? 'Nhập username hoặc email staff' : 'Nhập username hoặc email'}
+              label={isStaffLogin ? 'Email / SĐT nhân viên' : 'Email / Số điện thoại'}
+              placeholder={isStaffLogin ? 'Nhập email hoặc SĐT staff' : 'Nhập email hoặc số điện thoại'}
               value={username}
               onChangeText={setUsername}
               keyboardType="email-address"

@@ -50,7 +50,6 @@ export default function StaffProfileScreen() {
       const updated = await staffService.updateMe({
         fullname: fullName.trim(),
         email: profile.email,
-        username: profile.username,
         phone: phone.trim(),
         birthday: profile.birthday,
         avatar: profile.avatar,
@@ -58,7 +57,6 @@ export default function StaffProfileScreen() {
       setProfile(updated);
       updateSessionStaff({
         staffId: updated.staffId,
-        username: updated.username,
         fullname: updated.fullname,
         email: updated.email,
         role: updated.role,
@@ -111,7 +109,6 @@ export default function StaffProfileScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <ThemedText type="subtitle" style={styles.sectionTitle}>Thông tin cá nhân</ThemedText>
         <View style={styles.form}>
-          <AuthInput label="Tên đăng nhập" value={profile?.username || ''} editable={false} />
           <AuthInput label="Email" value={profile?.email || ''} editable={false} keyboardType="email-address" />
           <AuthInput label="Họ và tên" value={fullName} onChangeText={setFullName} placeholder="Nhập họ và tên" />
           <AuthInput label="Số điện thoại" value={phone} onChangeText={setPhone} placeholder="Nhập số điện thoại" keyboardType="phone-pad" />

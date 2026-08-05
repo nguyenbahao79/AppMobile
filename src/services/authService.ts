@@ -6,7 +6,6 @@ export type AuthResponse = {
   refreshToken: string;
   user?: {
     userId: number;
-    username: string;
     fullname?: string;
     email?: string;
     phone?: string;
@@ -18,7 +17,6 @@ export type AuthResponse = {
   };
   staff?: {
     staffId: number;
-    username: string;
     fullname?: string;
     email?: string;
     role?: string;
@@ -28,7 +26,7 @@ export type AuthResponse = {
   };
 };
 
-type Credentials = { username: string; password: string };
+type Credentials = { account: string; password: string };
 
 export type ForgotPasswordResponse = {
   resetSessionToken: string;
@@ -40,8 +38,8 @@ export const authService = {
   staffLogin: (credentials: Credentials) => apiClient.post(API_ENDPOINTS.STAFF_LOGIN, credentials) as Promise<AuthResponse>,
   register: (userData: unknown) => apiClient.post(API_ENDPOINTS.REGISTER, userData) as Promise<AuthResponse>,
 
-  forgotPassword: (usernameOrEmail: string) =>
-    apiClient.post(API_ENDPOINTS.FORGOT_PASSWORD, { usernameOrEmail }) as Promise<ForgotPasswordResponse>,
+  forgotPassword: (account: string) =>
+    apiClient.post(API_ENDPOINTS.FORGOT_PASSWORD, { account }) as Promise<ForgotPasswordResponse>,
   verifyForgotOtp: (resetSessionToken: string, otp: string) =>
     apiClient.post(API_ENDPOINTS.FORGOT_PASSWORD_VERIFY_OTP, { resetSessionToken, otp }),
   resendForgotOtp: (resetSessionToken: string) =>
