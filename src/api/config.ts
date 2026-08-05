@@ -94,6 +94,7 @@ export const API_ENDPOINTS = {
   HOLD_SEATS: '/showtime-seat-holds/refresh',
   NEWS_LIST: '/news',
   NEWS_DETAIL: (id: string | number) => `/news/${id}`,
+  MOVIE_REVIEWS: (movieId: string | number) => `/movies/${movieId}/reviews`,
   
   // BOOKING & TICKETS
   QUOTE_TICKETS: '/ticket-orders/quote',
