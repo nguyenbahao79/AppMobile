@@ -119,7 +119,7 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <AppHeader 
-        title={session?.user?.fullname || session?.user?.username || 'Khách hàng'}
+        title={session?.user?.fullname || session?.user?.email || 'Khách hàng'}
         subtitle="Xin chào," 
         rightElement={
           <View style={{ flex: 1, marginRight: 10, minWidth: width * 0.4 }}>

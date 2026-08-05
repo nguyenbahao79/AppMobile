@@ -11,7 +11,6 @@ import { authService } from '@/services/authService';
 
 
 export default function RegisterScreen() {
-  const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -21,19 +20,13 @@ export default function RegisterScreen() {
   const tintColor = useThemeColor({}, 'tint');
 
   const handleRegister = async () => {
-    const cleanUsername = username.trim();
     const cleanFullName = fullName.trim();
     const cleanEmail = email.trim();
     const cleanPhone = phone.replace(/\s/g, '');
     const cleanBirthday = birthday.trim();
 
-    if (!cleanUsername || !cleanFullName || !cleanEmail || !cleanPhone || !cleanBirthday || !password.trim()) {
+    if (!cleanFullName || !cleanEmail || !cleanPhone || !cleanBirthday || !password.trim()) {
       Alert.alert('Thông báo', 'Vui lòng điền đầy đủ thông tin.');
-      return;
-    }
-
-    if (cleanUsername.length < 6 || cleanUsername.length > 50) {
-      Alert.alert('Lỗi', 'Tên đăng nhập phải từ 6 đến 50 ký tự.');
       return;
     }
 
@@ -56,7 +49,6 @@ export default function RegisterScreen() {
     try {
       // DTO khớp với UserRequest trong Spring Boot của bạn
       const userData = {
-        username: cleanUsername,
         password: password.trim(),
         fullname: cleanFullName,
         email: cleanEmail,
@@ -95,13 +87,6 @@ export default function RegisterScreen() {
           </View>
 
           <View style={styles.form}>
-          <AuthInput
-            label="Tên đăng nhập *"
-            placeholder="Nhập tên đăng nhập"
-            value={username}
-            onChangeText={setUsername}
-            autoCapitalize="none"
-          />
           <AuthInput
             label="Mật khẩu *"
             placeholder="••••••"

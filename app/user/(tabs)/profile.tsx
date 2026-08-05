@@ -99,7 +99,7 @@ export default function ProfileScreen() {
               style={styles.avatar}
             />
             <View style={styles.nameContainer}>
-              <ThemedText type="title" style={styles.name}>{user?.fullname || user?.username || 'Khách hàng'}</ThemedText>
+              <ThemedText type="title" style={styles.name}>{user?.fullname || user?.email || 'Khách hàng'}</ThemedText>
               <ThemedText style={styles.email}>{user?.email || user?.phone || 'Chưa cập nhật email'}</ThemedText>
               <Pressable style={[styles.editBadge, { backgroundColor: theme.tint + '20' }]} onPress={() => router.push('/user/edit-profile' as Href)}>
                 <ThemedText style={[styles.editBadgeText, { color: theme.tint }]}>{rankName}</ThemedText>

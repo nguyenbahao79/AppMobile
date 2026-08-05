@@ -60,7 +60,7 @@ export default function StaffDashboard() {
         <Pressable style={styles.header} onPress={() => router.push('/staff/profile')}>
           <Text style={[styles.title, { color: theme.text }]}>Operations Hub</Text>
           <Text style={[styles.subtitle, { color: theme.tabIconDefault }]}>
-            {session?.staff?.fullname || session?.staff?.username || 'Ticket Staff'}
+            {session?.staff?.fullname || session?.staff?.email || 'Ticket Staff'}
             {stats.cinemaName ? ` · ${stats.cinemaName}` : ''}
           </Text>
         </Pressable>

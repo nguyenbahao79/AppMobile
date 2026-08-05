@@ -15,7 +15,6 @@ function todayIso() {
 export type StaffProfile = {
   staffId: number;
   email: string;
-  username: string;
   fullname: string;
   phone?: string;
   birthday?: string;
@@ -33,7 +32,7 @@ export const staffService = {
     return apiClient.get(API_ENDPOINTS.STAFF_ME) as Promise<StaffProfile>;
   },
 
-  async updateMe(payload: { fullname: string; email: string; username: string; phone: string; birthday?: string; avatar?: string }) {
+  async updateMe(payload: { fullname: string; email: string; phone: string; birthday?: string; avatar?: string }) {
     return apiClient.put(API_ENDPOINTS.STAFF_ME, payload) as Promise<StaffProfile>;
   },
 
