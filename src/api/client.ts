@@ -45,31 +45,56 @@ async function refreshAccessToken(): Promise<string | null> {
 
   isRefreshing = true;
   try {
-    const res = await fetch(`${BASE_URL}${API_ENDPOINTS.REFRESH_TOKEN}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ refreshToken, accessToken }),
-    });
-    const text = await res.text();
-    const payload = text ? JSON.parse(text) : null;
-    if (!res.ok) throw new Error('refresh failed');
+    let res: Response;
+    try {
+      res = await fetch(`${BASE_URL}${API_ENDPOINTS.REFRESH_TOKEN}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ refreshToken, accessToken }),
+      });
+    } catch {
+      // Mất mạng / không tới được BE — refresh token có thể vẫn còn hạn, đừng đăng xuất, thử lại lần sau.
+      notifyRefreshSubscribers(null);
+      return null;
+    }
 
-    const data = (payload?.data ?? payload) as { token?: string; refreshToken?: string } | null;
+    // Chỉ 401/403 mới thật sự nghĩa là refresh token bị BE từ chối (hết hạn/thu hồi).
+    // Các lỗi khác (500, mất mạng, BE vừa khởi động lại...) là tạm thời — không được xóa token.
+    if (res.status === 401 || res.status === 403) {
+      accessToken = null;
+      refreshToken = null;
+      await clearTokens();
+      notifyRefreshSubscribers(null);
+      return null;
+    }
+
+    const text = await res.text();
+    let payload: unknown = null;
+    try {
+      payload = text ? JSON.parse(text) : null;
+    } catch {
+      notifyRefreshSubscribers(null);
+      return null;
+    }
+    if (!res.ok) {
+      notifyRefreshSubscribers(null);
+      return null;
+    }
+
+    const data = (payload as { data?: { token?: string; refreshToken?: string } })?.data
+      ?? (payload as { token?: string; refreshToken?: string } | null);
     const newToken = data?.token ?? null;
     const newRefreshToken = data?.refreshToken ?? refreshToken;
-    if (!newToken) throw new Error('refresh returned no token');
+    if (!newToken) {
+      notifyRefreshSubscribers(null);
+      return null;
+    }
 
     accessToken = newToken;
     refreshToken = newRefreshToken;
     await setTokens({ token: newToken, refreshToken: newRefreshToken });
     notifyRefreshSubscribers(newToken);
     return newToken;
-  } catch {
-    accessToken = null;
-    refreshToken = null;
-    await clearTokens();
-    notifyRefreshSubscribers(null);
-    return null;
   } finally {
     isRefreshing = false;
   }
