@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   StyleSheet, ScrollView, View, Text, TouchableOpacity, FlatList,
-  Dimensions, ActivityIndicator, TextInput,
+  Dimensions, ActivityIndicator, TextInput, RefreshControl,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -202,7 +202,7 @@ const mc = StyleSheet.create({
   badge: { position: 'absolute', top: 8, left: 8, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 3 },
   badgeText: { fontSize: 8, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
   info: { padding: 10 },
-  title: { fontSize: 12, fontWeight: 'bold', color: WHITE, lineHeight: 17 },
+  title: { fontSize: 12, fontWeight: 'bold', color: WHITE, lineHeight: 17, height: 34 },
   meta: { fontSize: 10, color: MUTED, marginTop: 3 },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 },
   ratingText: { fontSize: 10, fontWeight: '700', color: '#FFD700' },
@@ -372,20 +372,32 @@ export default function HomeScreen() {
   const [movies, setMovies] = useState<Movie[]>([]);
   const [news, setNews] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
+
+  const fetchData = useCallback(async () => {
+    try {
+      const [moviesData, newsData] = await Promise.all([
+        movieService.getAllMovies(),
+        newsService.getNewsList(),
+      ]);
+      setMovies(moviesData);
+      setNews(newsData);
+    } catch {}
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([movieService.getAllMovies(), newsService.getNewsList()])
-      .then(([moviesData, newsData]) => {
-        if (cancelled) return;
-        setMovies(moviesData);
-        setNews(newsData);
-      })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setLoading(false); });
+    setLoading(true);
+    fetchData().finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [fetchData]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
+  }, [fetchData]);
 
   const nowPlaying = movies.filter((m) => m.status === 1).slice(0, 8);
   const comingSoon = movies.filter((m) => m.status !== 1).slice(0, 8);
@@ -436,7 +448,13 @@ export default function HomeScreen() {
         )}
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 48 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 48 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FFFFFF" colors={['#FFFFFF']} />
+        }
+      >
         {isSearching ? (
           <SearchResults movies={movies} query={search} />
         ) : (

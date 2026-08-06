@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, StyleSheet, FlatList, Pressable, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
+import { View, StyleSheet, FlatList, Pressable, SafeAreaView, ActivityIndicator, Alert, RefreshControl } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -26,6 +26,7 @@ export default function VouchersScreen() {
   const [catalog, setCatalog] = useState<PublicVoucher[]>([]);
   const [wallet, setWallet] = useState<MyVoucher[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [redeemingId, setRedeemingId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
@@ -46,6 +47,12 @@ export default function VouchersScreen() {
       load();
     }, [load])
   );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  }, [load]);
 
   const redeemedVoucherIds = new Set(wallet.map((w) => w.voucher?.id).filter(Boolean));
 
@@ -136,7 +143,13 @@ export default function VouchersScreen() {
             <ThemedText style={styles.emptyText}>Chưa có voucher nào</ThemedText>
           </View>
         ) : (
-          <FlatList data={catalog} keyExtractor={(item) => String(item.id)} contentContainerStyle={styles.list} renderItem={renderCatalogItem} />
+          <FlatList
+            data={catalog}
+            keyExtractor={(item) => String(item.id)}
+            contentContainerStyle={styles.list}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FFFFFF" colors={['#FFFFFF']} progressBackgroundColor="#1C1C1E" />}
+            renderItem={renderCatalogItem}
+          />
         )
       ) : wallet.length === 0 ? (
         <View style={styles.center}>
@@ -144,7 +157,13 @@ export default function VouchersScreen() {
           <ThemedText style={styles.emptyText}>Bạn chưa có voucher nào</ThemedText>
         </View>
       ) : (
-        <FlatList data={wallet} keyExtractor={(item) => String(item.userVoucherId)} contentContainerStyle={styles.list} renderItem={renderWalletItem} />
+        <FlatList
+          data={wallet}
+          keyExtractor={(item) => String(item.userVoucherId)}
+          contentContainerStyle={styles.list}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FFFFFF" colors={['#FFFFFF']} progressBackgroundColor="#1C1C1E" />}
+          renderItem={renderWalletItem}
+        />
       )}
     </SafeAreaView>
   );

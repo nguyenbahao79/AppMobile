@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, StyleSheet, FlatList, SafeAreaView, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, FlatList, SafeAreaView, ActivityIndicator, RefreshControl } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -14,25 +14,31 @@ export default function CinemasScreen() {
   const isDark = colorScheme === 'dark';
   const [cinemas, setCinemas] = useState<Cinema[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchCinemas = useCallback(async () => {
+    try {
+      const data = await cinemaService.getCinemas();
+      setCinemas(data);
+    } catch {
+      // giữ danh sách cũ nếu lỗi mạng
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-      (async () => {
-        try {
-          const data = await cinemaService.getCinemas();
-          if (!cancelled) setCinemas(data);
-        } catch {
-          // giữ danh sách cũ nếu lỗi mạng
-        } finally {
-          if (!cancelled) setLoading(false);
-        }
-      })();
-      return () => {
-        cancelled = true;
-      };
-    }, [])
+      setLoading(true);
+      fetchCinemas().finally(() => { if (!cancelled) setLoading(false); });
+      return () => { cancelled = true; };
+    }, [fetchCinemas])
   );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchCinemas();
+    setRefreshing(false);
+  }, [fetchCinemas]);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
@@ -51,6 +57,15 @@ export default function CinemasScreen() {
           data={cinemas}
           keyExtractor={(item) => String(item.cinemaId)}
           contentContainerStyle={styles.list}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#FFFFFF"
+              colors={['#FFFFFF']}
+              progressBackgroundColor="#1C1C1E"
+            />
+          }
           renderItem={({ item }) => (
             <View style={[styles.card, isDark && styles.cardDark]}>
               <IconSymbol name="mappin.and.ellipse" size={22} color={theme.tint} />

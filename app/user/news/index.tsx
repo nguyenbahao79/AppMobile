@@ -1,7 +1,7 @@
 import React, { useCallback, useState, useMemo, useRef, useEffect } from 'react';
 import {
   StyleSheet, View, Text, TextInput, TouchableOpacity,
-  FlatList, ActivityIndicator, ScrollView, Dimensions,
+  FlatList, ActivityIndicator, ScrollView, Dimensions, RefreshControl,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -254,19 +254,30 @@ const ac = StyleSheet.create({
 export default function NewsListScreen() {
   const [news, setNews]       = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch]   = useState('');
+
+  const fetchNews = useCallback(async () => {
+    try {
+      const data = await newsService.getNewsList();
+      setNews(data);
+    } catch {}
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
       setLoading(true);
-      newsService.getNewsList()
-        .then((data) => { if (!cancelled) setNews(data); })
-        .catch(() => {})
-        .finally(() => { if (!cancelled) setLoading(false); });
+      fetchNews().finally(() => { if (!cancelled) setLoading(false); });
       return () => { cancelled = true; };
-    }, [])
+    }, [fetchNews])
   );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchNews();
+    setRefreshing(false);
+  }, [fetchNews]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return news;
@@ -293,6 +304,9 @@ export default function NewsListScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 52 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FFFFFF" colors={['#FFFFFF']} />
+        }
       >
         {/* ── Hero ── */}
         <View style={styles.hero}>
