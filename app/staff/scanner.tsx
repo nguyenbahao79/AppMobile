@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  StyleSheet, Text, View, TouchableOpacity, ScrollView, ActivityIndicator, Alert,
+  StyleSheet, Text, View, TouchableOpacity, ScrollView, ActivityIndicator,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,6 +19,7 @@ const WHITE  = '#f0f0ff';
 const MUTED  = 'rgba(240,240,255,0.5)';
 const BORDER = 'rgba(255,255,255,0.1)';
 const GREEN  = '#00d68f';
+const ORANGE = '#ff9f0a';
 
 const FRAME_SIZE   = 250;
 const CORNER_SIZE  = 32;
@@ -33,21 +34,20 @@ type TicketInfo = {
 };
 type FoodInfo = { productName?: string; quantity?: number };
 type ScannedOrder = {
-  qrToken: string;
   orderCode: string;
   customerName?: string;
   status?: number;
   finalAmount?: number;
+  checkedInAt?: string;
   tickets?: TicketInfo[];
   foods?: FoodInfo[];
-  checkedIn?: boolean;
-  checkedInAt?: string;
 };
 
 type Phase =
   | { name: 'idle' }
   | { name: 'scanning' }
   | { name: 'success'; data: ScannedOrder }
+  | { name: 'already_used'; message: string }
   | { name: 'error'; message: string };
 
 /* ── Info row helper ── */
@@ -75,7 +75,6 @@ export default function QRScannerScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [phase, setPhase] = useState<Phase>({ name: 'idle' });
   const [scanned, setScanned] = useState(false);
-  const [checkingIn, setCheckingIn] = useState(false);
 
   const staffName   = session?.staff?.fullname  || 'Nhân viên';
   const cinemaName  = session?.staff?.cinemaName || '';
@@ -94,17 +93,16 @@ export default function QRScannerScreen() {
     if (scanned) return;
     setScanned(true);
     try {
-      const qrToken = data.trim();
-      const response = await apiClient.post(API_ENDPOINTS.VERIFY_TICKET, { qrToken });
+      const response = await apiClient.post(API_ENDPOINTS.VERIFY_TICKET, { qrToken: data.trim() });
       const r = (response ?? {}) as Record<string, any>;
       setPhase({
         name: 'success',
         data: {
-          qrToken,
           orderCode: String(r.orderCode || r.ticketCode || '—'),
           customerName: r.customerName,
           status: r.status,
           finalAmount: r.finalAmount,
+          checkedInAt: r.checkedInAt,
           tickets: [{
             movieTitle: r.movieTitle,
             showtime: r.showtime,
@@ -113,31 +111,15 @@ export default function QRScannerScreen() {
             seatTypeName: r.seatTypeName,
           }],
           foods: Array.isArray(r.foods) ? r.foods : [],
-          checkedIn: Boolean(r.checkedIn),
-          checkedInAt: r.checkedInAt,
         },
       });
     } catch (error: any) {
-      setPhase({ name: 'error', message: error.message || 'Không tìm thấy thông tin vé này.' });
-    }
-  };
-
-  const confirmCheckIn = async () => {
-    if (phase.name !== 'success' || checkingIn) return;
-    const { qrToken } = phase.data;
-    setCheckingIn(true);
-    try {
-      const response = await apiClient.post(API_ENDPOINTS.CHECK_IN_TICKET, { qrToken });
-      const r = (response ?? {}) as Record<string, any>;
-      setPhase((prev) =>
-        prev.name === 'success'
-          ? { name: 'success', data: { ...prev.data, checkedIn: true, checkedInAt: r.checkedInAt } }
-          : prev
-      );
-    } catch (error: any) {
-      Alert.alert('Không xác nhận được', error.message || 'Vui lòng thử lại.');
-    } finally {
-      setCheckingIn(false);
+      const msg = error.message || 'Không tìm thấy thông tin vé này.';
+      if (msg.includes('đã được sử dụng')) {
+        setPhase({ name: 'already_used', message: msg });
+      } else {
+        setPhase({ name: 'error', message: msg });
+      }
     }
   };
 
@@ -244,7 +226,6 @@ export default function QRScannerScreen() {
 
         {/* Idle content */}
         <View style={styles.idleContent}>
-          {/* Icon */}
           <View style={styles.qrIconWrap}>
             <Ionicons name="qr-code" size={80} color={YELLOW} />
           </View>
@@ -268,7 +249,6 @@ export default function QRScannerScreen() {
             )}
           </View>
 
-          {/* Start scan button */}
           <TouchableOpacity style={styles.scanBtn} onPress={startScan} activeOpacity={0.85}>
             <Ionicons name="qr-code-outline" size={20} color="#fff" />
             <Text style={styles.scanBtnText}>Bắt đầu quét mã QR</Text>
@@ -278,11 +258,26 @@ export default function QRScannerScreen() {
     );
   }
 
-  /* ════ PHASE: SUCCESS / ERROR ════ */
-  const isSuccess   = phase.name === 'success';
-  const isPaid      = isSuccess && phase.data.status === 1;
-  const isCheckedIn = isSuccess && Boolean(phase.data.checkedIn);
-  const validTicket = isSuccess && isPaid;
+  /* ════ PHASE: SUCCESS / ALREADY_USED / ERROR ════ */
+  const isSuccess     = phase.name === 'success';
+  const isAlreadyUsed = phase.name === 'already_used';
+  const isPaid        = isSuccess && phase.data.status === 1;
+
+  const topBadgeColor =
+    isSuccess && isPaid ? GREEN :
+    isAlreadyUsed ? ORANGE : PINK;
+  const topBadgeBg =
+    isSuccess && isPaid ? 'rgba(0,214,143,0.12)' :
+    isAlreadyUsed ? 'rgba(255,159,10,0.12)' : 'rgba(255,45,120,0.12)';
+  const topBadgeBorder =
+    isSuccess && isPaid ? 'rgba(0,214,143,0.25)' :
+    isAlreadyUsed ? 'rgba(255,159,10,0.25)' : 'rgba(255,45,120,0.25)';
+  const topBadgeIcon =
+    isSuccess && isPaid ? 'checkmark-circle' :
+    isAlreadyUsed ? 'time-outline' : 'close-circle';
+  const topBadgeLabel =
+    isSuccess && isPaid ? 'VÀO RẠP THÀNH CÔNG' :
+    isAlreadyUsed ? 'VÉ ĐÃ ĐƯỢC QUÉT' : 'KHÔNG HỢP LỆ';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -290,15 +285,9 @@ export default function QRScannerScreen() {
 
       {/* Top bar */}
       <View style={styles.topBar}>
-        <View style={[styles.topBadge, { backgroundColor: validTicket ? 'rgba(0,214,143,0.12)' : 'rgba(255,45,120,0.12)', borderColor: validTicket ? 'rgba(0,214,143,0.25)' : 'rgba(255,45,120,0.25)' }]}>
-          <Ionicons
-            name={validTicket ? 'checkmark-circle' : 'close-circle'}
-            size={13}
-            color={validTicket ? GREEN : PINK}
-          />
-          <Text style={[styles.topBadgeText, { color: validTicket ? GREEN : PINK }]}>
-            {isCheckedIn ? 'ĐÃ VÀO RẠP' : validTicket ? 'VÉ HỢP LỆ' : 'KHÔNG HỢP LỆ'}
-          </Text>
+        <View style={[styles.topBadge, { backgroundColor: topBadgeBg, borderColor: topBadgeBorder }]}>
+          <Ionicons name={topBadgeIcon as any} size={13} color={topBadgeColor} />
+          <Text style={[styles.topBadgeText, { color: topBadgeColor }]}>{topBadgeLabel}</Text>
         </View>
         <TouchableOpacity style={styles.cancelBtn} onPress={reset}>
           <Ionicons name="close" size={16} color={WHITE} />
@@ -308,15 +297,20 @@ export default function QRScannerScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
 
-        {/* ── Success ── */}
+        {/* ── Success: vào rạp thành công ── */}
         {isSuccess && (
           <>
-            <View style={[styles.resultBadge, { backgroundColor: isCheckedIn ? GREEN : isPaid ? PURPLE : PINK }]}>
-              <Ionicons name={isCheckedIn ? 'checkmark-done-circle' : isPaid ? 'checkmark-circle' : 'close-circle'} size={16} color="#fff" />
-              <Text style={styles.resultBadgeText}>
-                {isCheckedIn ? `ĐÃ VÀO RẠP LÚC ${phase.data.checkedInAt || ''}` : isPaid ? 'ĐÃ THANH TOÁN' : 'CHƯA HOÀN TẤT'}
-              </Text>
+            <View style={[styles.resultBadge, { backgroundColor: isPaid ? GREEN : PINK }]}>
+              <Ionicons name={isPaid ? 'checkmark-circle' : 'close-circle'} size={16} color="#fff" />
+              <Text style={styles.resultBadgeText}>{isPaid ? 'VÀO RẠP THÀNH CÔNG' : 'CHƯA HOÀN TẤT'}</Text>
             </View>
+
+            {phase.data.checkedInAt && (
+              <View style={styles.checkedInRow}>
+                <Ionicons name="time-outline" size={14} color={GREEN} />
+                <Text style={styles.checkedInText}>Quét lúc {phase.data.checkedInAt}</Text>
+              </View>
+            )}
 
             <Text style={styles.orderCode}>{phase.data.orderCode}</Text>
 
@@ -363,38 +357,28 @@ export default function QRScannerScreen() {
                 ))}
               </View>
             )}
-
-            {/* Check-in action */}
-            {isPaid && !isCheckedIn && (
-              <TouchableOpacity
-                style={[styles.checkInBtn, checkingIn && { opacity: 0.7 }]}
-                onPress={confirmCheckIn}
-                activeOpacity={0.85}
-                disabled={checkingIn}
-              >
-                {checkingIn ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <>
-                    <Ionicons name="log-in-outline" size={20} color="#fff" />
-                    <Text style={styles.checkInBtnText}>Xác nhận vào rạp</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            )}
-            {isCheckedIn && (
-              <View style={styles.checkedInNote}>
-                <Ionicons name="checkmark-done-circle" size={18} color={GREEN} />
-                <Text style={styles.checkedInNoteText}>
-                  Khách đã được soát vé lúc {phase.data.checkedInAt || '—'}
-                </Text>
-              </View>
-            )}
           </>
         )}
 
-        {/* ── Error ── */}
-        {!isSuccess && (
+        {/* ── Already used: vé đã quét trước đó ── */}
+        {isAlreadyUsed && (
+          <View style={styles.alreadyUsedBlock}>
+            <View style={[styles.errorIconWrap, { backgroundColor: 'rgba(255,159,10,0.1)', borderColor: 'rgba(255,159,10,0.2)' }]}>
+              <Ionicons name="time" size={44} color={ORANGE} />
+            </View>
+            <Text style={styles.errorTitle}>Vé đã được sử dụng</Text>
+            <Text style={styles.errorMsg}>{(phase as any).message}</Text>
+            <View style={styles.alreadyUsedHint}>
+              <Ionicons name="information-circle-outline" size={15} color={ORANGE} />
+              <Text style={[styles.errorMsg, { color: ORANGE, marginBottom: 0, textAlign: 'left', fontSize: 12 }]}>
+                Vé này đã được quét vào rạp. Liên hệ quản lý nếu cần hỗ trợ.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* ── Error: vé không hợp lệ ── */}
+        {phase.name === 'error' && (
           <View style={styles.errorBlock}>
             <View style={styles.errorIconWrap}>
               <Ionicons name="warning" size={44} color={PINK} />
@@ -523,7 +507,19 @@ const styles = StyleSheet.create({
   movieTitle: { fontSize: 16, fontWeight: '800', color: WHITE, paddingBottom: 6 },
   foodItem: { fontSize: 13, color: MUTED, paddingVertical: 4 },
 
+  checkedInRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginBottom: 10,
+  },
+  checkedInText: { fontSize: 12, fontWeight: '700', color: GREEN },
+
   errorBlock: { alignItems: 'center', paddingVertical: 32 },
+  alreadyUsedBlock: { alignItems: 'center', paddingVertical: 32 },
+  alreadyUsedHint: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    backgroundColor: 'rgba(255,159,10,0.08)',
+    borderRadius: 10, padding: 12, marginTop: 4, alignSelf: 'stretch',
+  },
   errorIconWrap: {
     width: 96, height: 96, borderRadius: 48,
     backgroundColor: 'rgba(255,45,120,0.1)',
@@ -532,22 +528,4 @@ const styles = StyleSheet.create({
   },
   errorTitle: { fontSize: 20, fontWeight: '800', color: WHITE, marginBottom: 10 },
   errorMsg: { fontSize: 14, color: MUTED, textAlign: 'center', lineHeight: 22, marginBottom: 28 },
-
-  /* Check-in */
-  checkInBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    backgroundColor: GREEN, borderRadius: 14,
-    paddingVertical: 15, marginTop: 6, marginBottom: 6,
-    shadowColor: GREEN, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 8,
-    elevation: 6,
-  },
-  checkInBtnText: { fontSize: 16, fontWeight: '800', color: '#fff' },
-  checkedInNote: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: 'rgba(0,214,143,0.1)', borderRadius: 12,
-    borderWidth: 1, borderColor: 'rgba(0,214,143,0.25)',
-    paddingVertical: 12, paddingHorizontal: 14,
-    marginTop: 6, marginBottom: 6,
-  },
-  checkedInNoteText: { fontSize: 13, fontWeight: '700', color: GREEN, flex: 1 },
 });

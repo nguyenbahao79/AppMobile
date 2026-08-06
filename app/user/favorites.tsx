@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, StyleSheet, FlatList, Pressable, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
+import { View, StyleSheet, FlatList, Pressable, SafeAreaView, ActivityIndicator, Alert, RefreshControl } from 'react-native';
 import { Image } from 'expo-image';
 import { Link, Href, useFocusEffect } from 'expo-router';
 import { Colors } from '@/constants/theme';
@@ -14,6 +14,7 @@ export default function FavoritesScreen() {
   const theme = Colors[colorScheme ?? 'light'];
   const [favorites, setFavorites] = useState<FavoriteMovie[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -31,6 +32,12 @@ export default function FavoritesScreen() {
       load();
     }, [load])
   );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  }, [load]);
 
   const handleRemove = (movie: FavoriteMovie) => {
     Alert.alert('Bỏ yêu thích', `Bỏ "${movie.title}" khỏi danh sách yêu thích?`, [
@@ -67,6 +74,9 @@ export default function FavoritesScreen() {
           data={favorites}
           keyExtractor={(item) => String(item.movieId)}
           contentContainerStyle={styles.list}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FFFFFF" colors={['#FFFFFF']} progressBackgroundColor="#1C1C1E" />
+          }
           renderItem={({ item }) => (
             <View style={styles.row}>
               <Link href={`/user/movie/${item.movieId}` as Href} asChild>

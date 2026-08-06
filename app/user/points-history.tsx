@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, StyleSheet, FlatList, SafeAreaView, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, FlatList, SafeAreaView, ActivityIndicator, RefreshControl } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -14,25 +14,31 @@ export default function PointsHistoryScreen() {
   const isDark = colorScheme === 'dark';
   const [rows, setRows] = useState<PointsHistoryRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchPoints = useCallback(async () => {
+    try {
+      const data = await meService.getPointsHistory();
+      setRows(data);
+    } catch {
+      // giữ danh sách cũ nếu lỗi mạng
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-      (async () => {
-        try {
-          const data = await meService.getPointsHistory();
-          if (!cancelled) setRows(data);
-        } catch {
-          // giữ danh sách cũ nếu lỗi mạng
-        } finally {
-          if (!cancelled) setLoading(false);
-        }
-      })();
-      return () => {
-        cancelled = true;
-      };
-    }, [])
+      setLoading(true);
+      fetchPoints().finally(() => { if (!cancelled) setLoading(false); });
+      return () => { cancelled = true; };
+    }, [fetchPoints])
   );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchPoints();
+    setRefreshing(false);
+  }, [fetchPoints]);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
@@ -51,6 +57,15 @@ export default function PointsHistoryScreen() {
           data={rows}
           keyExtractor={(item) => String(item.pointHistoryId)}
           contentContainerStyle={styles.list}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#FFFFFF"
+              colors={['#FFFFFF']}
+              progressBackgroundColor="#1C1C1E"
+            />
+          }
           renderItem={({ item }) => (
             <View style={[styles.row, isDark && styles.rowDark]}>
               <View style={{ flex: 1 }}>
