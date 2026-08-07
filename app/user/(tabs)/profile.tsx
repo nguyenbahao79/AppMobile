@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   Platform,
   Alert,
 } from 'react-native';
-import { useRouter, Href } from 'expo-router';
+import { useRouter, Href, useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/base/icon-symbol';
 import { useAuth } from '@/context/AuthContext';
 import { useTickets } from '@/context/TicketContext';
@@ -79,8 +79,10 @@ type MenuItem = {
 // ─── Component ───────────────────────────────────────────────────────────────
 export default function ProfileScreen() {
   const router = useRouter();
-  const { session, logout } = useAuth();
-  const { tickets }         = useTickets();
+  const { session, logout, refreshUser } = useAuth();
+  const { tickets }                      = useTickets();
+
+  useFocusEffect(useCallback(() => { refreshUser(); }, []));
   const user = session?.user;
 
   const avatarUrl     = user?.avatar?.trim() || '';
@@ -100,13 +102,10 @@ export default function ProfileScreen() {
       items: [
         { icon: 'person.fill',        title: 'Thông tin cá nhân',       accent: C.purple, route: '/user/edit-profile'        },
         { icon: 'lock.fill',          title: 'Bảo mật & Mật khẩu',      accent: '#007AFF', route: '/user/security'           },
-        { icon: 'ticket.fill',        title: 'Lịch sử đặt vé',          accent: C.pink,   route: '/user/(tabs)/tickets',
-          badge: activeCount > 0 ? String(activeCount) : undefined },
+        { icon: 'ticket.fill',        title: 'Lịch sử đặt vé',          accent: C.pink,   route: '/user/(tabs)/tickets' },
         { icon: 'heart.fill',         title: 'Phim yêu thích',          accent: '#FF3B30', route: '/user/favorites'          },
         { icon: 'gift.fill',          title: 'Voucher của tôi',          accent: '#AF52DE', route: '/user/vouchers'           },
         { icon: 'star.fill',          title: 'Lịch sử điểm thưởng',    accent: C.yellow,  route: '/user/points-history'     },
-        { icon: 'creditcard.fill',    title: 'Phương thức thanh toán',  accent: '#FF9500',
-          action: () => Alert.alert('Thông báo', 'Chức năng thanh toán sẽ sớm ra mắt.') },
       ],
     },
     {

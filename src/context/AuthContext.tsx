@@ -1,6 +1,7 @@
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 
-import { clearSession, restoreTokensFromStorage, setSessionTokens } from '@/api/client';
+import { apiClient, clearSession, restoreTokensFromStorage, setSessionTokens } from '@/api/client';
+import { API_ENDPOINTS } from '@/api/config';
 import {
   clearStoredSession,
   getStoredSession,
@@ -18,6 +19,7 @@ type AuthContextValue = {
   logout: () => Promise<void>;
   updateSessionUser: (user: NonNullable<AuthResponse['user']>) => void;
   updateSessionStaff: (staff: NonNullable<AuthResponse['staff']>) => void;
+  refreshUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -97,6 +99,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setStoredSession(next).catch(() => {});
         return next;
       });
+    },
+    async refreshUser() {
+      if (!session?.user?.userId) return;
+      try {
+        const fresh = await apiClient.get(API_ENDPOINTS.USER_DETAIL(session.user.userId)) as any;
+        setSession((current) => {
+          if (!current) return current;
+          const next = { ...current, user: { ...current.user, ...fresh } };
+          setStoredSession(next).catch(() => {});
+          return next;
+        });
+      } catch {
+        // giữ session cũ nếu lỗi mạng
+      }
     },
   }), [session, isRestoring]);
 

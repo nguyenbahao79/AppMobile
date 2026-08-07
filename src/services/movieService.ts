@@ -12,9 +12,11 @@ function mapMovie(raw: BackendMovie): Movie {
   return {
     id: String(id),
     title: String(raw.title ?? 'Chưa có tên'),
-    genre: String(raw.genreName ?? raw.genre ?? ''),
+    genre: Array.isArray(raw.genres) && (raw.genres as string[]).length > 0
+      ? (raw.genres as string[]).join(' • ')
+      : String(raw.genreName ?? raw.genre ?? ''),
     duration: String(raw.duration ?? ''),
-    rating: Number(raw.rating ?? 5),
+    rating: raw.averageRating != null ? Number(raw.averageRating) : 0,
     poster,
     posterUrl: poster,
     backdrop: banner,
