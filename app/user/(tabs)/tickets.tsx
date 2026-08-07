@@ -25,6 +25,17 @@ const BORDER = 'rgba(255,255,255,0.08)';
 /* ── Status helpers ── */
 type StatusInfo = { label: string; color: string; bg: string; icon: React.ComponentProps<typeof Ionicons>['name'] };
 
+function isShowtimePast(showDateRaw?: string, timeStr?: string): boolean {
+  if (!showDateRaw) return false;
+  const base = new Date(showDateRaw);
+  if (isNaN(base.getTime())) return false;
+  if (timeStr) {
+    const [h, m] = timeStr.split(':').map(Number);
+    if (!isNaN(h) && !isNaN(m)) base.setHours(h, m, 0, 0);
+  }
+  return base < new Date();
+}
+
 function getStatusInfo(ticket: Ticket): StatusInfo {
   if (ticket.rawStatus === 'pending') {
     return { label: 'Chờ thanh toán', color: YELLOW, bg: 'rgba(212,226,25,0.12)', icon: 'time-outline' };
@@ -34,6 +45,9 @@ function getStatusInfo(ticket: Ticket): StatusInfo {
   }
   if (ticket.status === 'used') {
     return { label: 'Đã sử dụng', color: PURPLE, bg: 'rgba(123,31,162,0.15)', icon: 'checkmark-done-outline' };
+  }
+  if (isShowtimePast(ticket.showDateRaw, ticket.time)) {
+    return { label: 'Đã chiếu', color: MUTED, bg: 'rgba(240,240,255,0.08)', icon: 'checkmark-circle-outline' };
   }
   return { label: 'Sắp chiếu', color: GREEN, bg: 'rgba(76,175,80,0.12)', icon: 'film-outline' };
 }

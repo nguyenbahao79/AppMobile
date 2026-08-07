@@ -25,6 +25,8 @@ export interface Ticket {
   /** Trạng thái gốc từ BE ('pending' | 'completed' | 'cancelled' | ...) — dùng để quyết định có cho hủy hay không. */
   rawStatus?: string;
   payosOrderCode?: number;
+  /** Ngày chiếu gốc (ISO string từ BE) — dùng để so sánh thời gian thực tế. */
+  showDateRaw?: string;
 }
 
 type TransactionItem = {
@@ -128,6 +130,7 @@ export function TicketProvider({ children }: { children: ReactNode }) {
               moviePoster: firstTicket.moviePoster || 'https://placehold.co/160x240?text=Ticket',
               date: formatDate(firstTicket.showDate) || bookingDate,
               time: firstTicket.showTime || '',
+              showDateRaw: firstTicket.showDate,
               seats: seats.length ? seats : ['—'],
               totalPrice: Number(transaction.finalAmount || ticketItems.reduce((sum, item) => sum + Number(item.price || 0), 0)),
               paymentMethod: 'PayOS',

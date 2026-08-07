@@ -10,10 +10,12 @@ export type AuthResponse = {
     email?: string;
     phone?: string;
     avatar?: string;
+    birthday?: string;
     points?: number;
     rankName?: string;
     membershipRankName?: string;
     totalSpending?: number;
+    status?: number;
   };
   staff?: {
     staffId: number;

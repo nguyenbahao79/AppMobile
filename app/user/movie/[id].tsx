@@ -202,9 +202,13 @@ export default function MovieDetailScreen() {
     try {
       const review = await meService.submitReview(movieId, myRating, myComment.trim());
       setReviewStatus((prev) => (prev ? { ...prev, review } : prev));
-      // Refresh reviews list
-      const data = await movieService.getMovieReviews(id as string);
-      setReviews((data as Review[]).slice(0, 20));
+      // Refresh both movie detail (avg rating) and reviews list
+      const [updatedMovie, reviewsData] = await Promise.all([
+        movieService.getMovieDetail(id as string),
+        movieService.getMovieReviews(id as string),
+      ]);
+      if (updatedMovie) setMovie(updatedMovie);
+      setReviews((reviewsData as Review[]).slice(0, 20));
       Alert.alert('Cảm ơn bạn!', 'Đánh giá của bạn đã được lưu.');
     } catch (e: any) { Alert.alert('Không lưu được đánh giá', e.message || 'Vui lòng thử lại sau.'); }
     finally { setSubmittingReview(false); }
