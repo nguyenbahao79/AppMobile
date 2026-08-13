@@ -116,6 +116,10 @@ export const API_ENDPOINTS = {
   TICKET_DETAIL: (id: string) => `/staff/dashboard-stats/orders/${encodeURIComponent(id)}`,
   VERIFY_TICKET: '/staff/verify-ticket',
 
+  // STAFF SHIFTS
+  STAFF_SHIFTS_ACTIVE: '/shifts/active',
+  STAFF_SHIFTS_ME: '/shifts/me',
+
   // STAFF DASHBOARD
   STAFF_DASHBOARD_STATS: '/staff/dashboard-stats',
 

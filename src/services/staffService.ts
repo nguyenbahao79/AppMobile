@@ -1,6 +1,23 @@
 import { apiClient } from '@/api/client';
 import { API_ENDPOINTS } from '@/api/config';
 
+export type StaffShift = {
+  id: number;
+  staffId?: number;
+  staffName?: string;
+  role?: string;
+  phone?: string;
+  date?: string;
+  shiftType?: string;
+  startTime?: string;
+  endTime?: string;
+  rawStartTime?: string;
+  rawEndTime?: string;
+  /** "Đang làm" | "Sắp tới" | "Đã xong" */
+  status?: string;
+  cinemaName?: string;
+};
+
 export type StaffDashboardStats = {
   totalRevenue?: number;
   totalTicketsSold?: number;
@@ -38,5 +55,13 @@ export const staffService = {
 
   async changeMyPassword(currentPassword: string, newPassword: string) {
     return apiClient.put(API_ENDPOINTS.STAFF_ME_PASSWORD, { currentPassword, newPassword });
+  },
+
+  async getActiveShift() {
+    return apiClient.get(API_ENDPOINTS.STAFF_SHIFTS_ACTIVE) as Promise<StaffShift | null>;
+  },
+
+  async getMyShifts() {
+    return apiClient.get(API_ENDPOINTS.STAFF_SHIFTS_ME) as Promise<StaffShift[]>;
   },
 };

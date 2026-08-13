@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
+import { staffService } from '@/services/staffService';
 
 const NAVY = '#0d0d2b';
 const CARD_BG = '#14143a';
@@ -67,7 +68,8 @@ export default function LoginScreen() {
           setError('Không nhận được thông tin nhân viên.');
           return;
         }
-        router.replace('/staff');
+        const activeShift = await staffService.getActiveShift().catch(() => null);
+        router.replace(activeShift ? '/staff/scanner' : '/staff/shifts');
         return;
       }
 
