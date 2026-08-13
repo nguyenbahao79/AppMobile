@@ -115,7 +115,6 @@ export const API_ENDPOINTS = {
   VOUCHERS_LIST: '/vouchers',
   TICKET_DETAIL: (id: string) => `/staff/dashboard-stats/orders/${encodeURIComponent(id)}`,
   VERIFY_TICKET: '/staff/verify-ticket',
-  CHECK_IN_TICKET: '/staff/check-in-ticket',
 
   // STAFF DASHBOARD
   STAFF_DASHBOARD_STATS: '/staff/dashboard-stats',
