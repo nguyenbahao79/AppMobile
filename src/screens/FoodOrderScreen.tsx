@@ -6,13 +6,14 @@ import {
 import { Image } from 'expo-image';
 import { Href, router } from 'expo-router';
 import * as ExpoLinking from 'expo-linking';
-import * as WebBrowser from 'expo-web-browser';
 
 import { IconSymbol } from '@/components/base/icon-symbol';
 import { useAuth } from '@/context/AuthContext';
 import { bookingService, Product } from '@/services/bookingService';
 import { cinemaService, Cinema } from '@/services/cinemaService';
 import { foodOrderService } from '@/services/foodOrderService';
+import { API_ENDPOINTS } from '@/api/config';
+import PayosQrModal from '@/components/PayosQrModal';
 
 /* ── Theme ───────────────────────────────────────────────────────── */
 const C = {
@@ -44,6 +45,7 @@ export default function FoodOrderScreen() {
   const [cart, setCart] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
   const [stepLoading, setStepLoading] = useState(false);
+  const [payosQr, setPayosQr] = useState<{ code: string; orderCode: number; amountVnd: number } | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -122,23 +124,10 @@ export default function FoodOrderScreen() {
         returnUrl,
         cancelUrl: returnUrl,
       });
-      const checkoutUrl = response.payos?.checkoutUrl;
+      const qrCode = response.payos?.qrCode;
       const payosOrderCode = response.payosOrderCode;
-      if (checkoutUrl && payosOrderCode) {
-        const result = await WebBrowser.openAuthSessionAsync(checkoutUrl, returnUrl);
-        try {
-          await foodOrderService.confirmPayos(payosOrderCode);
-          Alert.alert('Thanh toán thành công', 'Đơn bắp nước của bạn đã được xác nhận.', [
-            { text: 'OK', onPress: () => router.back() },
-          ]);
-        } catch {
-          if (result.type === 'success') {
-            Alert.alert('Đang xử lý', 'Hệ thống đang xác nhận thanh toán. Vui lòng kiểm tra lại sau.');
-          } else {
-            foodOrderService.cancelPendingOrder(payosOrderCode).catch(() => {});
-            Alert.alert('Chưa thanh toán', 'Đơn bắp nước chưa được thanh toán và đã được hủy.');
-          }
-        }
+      if (qrCode && payosOrderCode) {
+        setPayosQr({ code: qrCode, orderCode: payosOrderCode, amountVnd: response.amountVnd || 0 });
       } else {
         Alert.alert('Đã tạo đơn', `Mã đơn: ${response.payosOrderCode || response.orderOnlineId}`);
       }
@@ -146,6 +135,24 @@ export default function FoodOrderScreen() {
       Alert.alert('Không tạo được đơn thanh toán', error.message || 'Vui lòng thử lại.');
     } finally {
       setStepLoading(false);
+    }
+  };
+
+  const handlePayosPaid = () => {
+    setPayosQr(null);
+    Alert.alert('Thanh toán thành công', 'Đơn bắp nước của bạn đã được xác nhận.', [
+      { text: 'OK', onPress: () => router.back() },
+    ]);
+  };
+
+  const handlePayosCancel = (reason: 'user' | 'expired' | 'cancelled_on_payos') => {
+    const orderCode = payosQr?.orderCode;
+    setPayosQr(null);
+    if (orderCode) foodOrderService.cancelPendingOrder(orderCode).catch(() => {});
+    if (reason === 'expired') {
+      Alert.alert('Hết hạn thanh toán', 'Mã QR đã hết hạn và đơn bắp nước đã được hủy.');
+    } else if (reason === 'cancelled_on_payos') {
+      Alert.alert('Đã hủy thanh toán', 'Đơn bắp nước đã được hủy.');
     }
   };
 
@@ -328,6 +335,16 @@ export default function FoodOrderScreen() {
           }
         </TouchableOpacity>
       </View>
+
+      <PayosQrModal
+        visible={Boolean(payosQr)}
+        qrCode={payosQr?.code ?? null}
+        amountVnd={payosQr?.amountVnd}
+        paymentQrUrl={API_ENDPOINTS.PAYMENT_QR_FOOD_ORDERS}
+        onCheckStatus={() => foodOrderService.checkPayosStatus(payosQr!.orderCode)}
+        onPaid={handlePayosPaid}
+        onCancel={handlePayosCancel}
+      />
     </SafeAreaView>
   );
 }

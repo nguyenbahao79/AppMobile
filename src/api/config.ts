@@ -106,6 +106,11 @@ export const API_ENDPOINTS = {
   CONFIRM_PAYOS_FOOD_ORDERS: '/food-orders/confirm-payos',
   CANCEL_PENDING_FOOD_ORDERS: '/food-orders/cancel-pending',
   TICKET_QR: (qrToken: string) => `/ticket-orders/qr/${encodeURIComponent(qrToken)}`,
+  /** Ảnh QR thanh toán PayOS render trong app (không mở trình duyệt ngoài) — data = payos.qrCode. */
+  PAYMENT_QR_TICKETS: (qrCode: string) => `/ticket-orders/payment-qr?data=${encodeURIComponent(qrCode)}`,
+  PAYMENT_QR_FOOD_ORDERS: (qrCode: string) => `/food-orders/payment-qr?data=${encodeURIComponent(qrCode)}`,
+  PAYOS_STATUS_TICKETS: (payosOrderCode: number) => `/ticket-orders/payos/${payosOrderCode}/status`,
+  PAYOS_STATUS_FOOD_ORDERS: (payosOrderCode: number) => `/food-orders/payos/${payosOrderCode}/status`,
   MY_TRANSACTIONS: '/me/transactions',
   MY_FAVORITES: '/me/favorites',
   FAVORITE_BY_MOVIE: (movieId: string | number) => `/me/favorites/${movieId}`,

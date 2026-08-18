@@ -14,7 +14,6 @@ import {
 import { Image } from 'expo-image';
 import { Href, Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import * as ExpoLinking from 'expo-linking';
-import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAuth } from '@/context/AuthContext';
@@ -22,6 +21,8 @@ import { Movie } from '@/mocks/movies';
 import { bookingService, Product, Seat, Showtime, TicketQuote } from '@/services/bookingService';
 import { movieService } from '@/services/movieService';
 import { meService, MyVoucher } from '@/services/meService';
+import { API_ENDPOINTS } from '@/api/config';
+import PayosQrModal from '@/components/PayosQrModal';
 
 // ─── Theme ───────────────────────────────────────────────────────────────────
 const NAVY   = '#0d0d2b';
@@ -162,6 +163,7 @@ export default function RealBookingScreen() {
   const [showVoucherPicker, setShowVoucherPicker] = useState(false);
   const [peerHeldSeatIds,  setPeerHeldSeatIds]  = useState<number[]>([]);
   const [abuseWarning,     setAbuseWarning]     = useState(false);
+  const [payosQr,          setPayosQr]          = useState<{ code: string; orderCode: number; amountVnd: number } | null>(null);
 
   const selectedShowtime = useMemo(
     () => showtimes.find((s) => s.id === selectedShowtimeId) ?? null,
@@ -359,23 +361,10 @@ export default function RealBookingScreen() {
         returnUrl,
         cancelUrl: returnUrl,
       });
-      const checkoutUrl    = response.payos?.checkoutUrl;
+      const qrCode         = response.payos?.qrCode;
       const payosOrderCode = response.payosOrderCode;
-      if (checkoutUrl && payosOrderCode) {
-        const result = await WebBrowser.openAuthSessionAsync(checkoutUrl, returnUrl);
-        try {
-          await bookingService.confirmPayos(payosOrderCode);
-          Alert.alert('Thanh toán thành công 🎉', 'Vé của bạn đã được xác nhận!', [
-            { text: 'Xem vé', onPress: () => router.replace('/user/(tabs)/tickets' as Href) },
-          ]);
-        } catch {
-          if (result.type === 'success') {
-            Alert.alert('Đang xử lý', 'Hệ thống đang xác nhận thanh toán. Vui lòng kiểm tra lại ở Vé của tôi sau ít phút.');
-          } else {
-            bookingService.cancelPendingOrder(payosOrderCode).catch(() => {});
-            Alert.alert('Chưa thanh toán', 'Đơn đặt vé chưa thanh toán và đã được hủy.');
-          }
-        }
+      if (qrCode && payosOrderCode) {
+        setPayosQr({ code: qrCode, orderCode: payosOrderCode, amountVnd: response.amountVnd || 0 });
       } else {
         Alert.alert('Đã tạo đơn', `Mã đơn: ${response.payosOrderCode || response.orderOnlineId}`);
       }
@@ -383,6 +372,24 @@ export default function RealBookingScreen() {
       Alert.alert('Không tạo được đơn thanh toán', e.message || 'Vui lòng thử lại.');
     } finally {
       setStepLoading(false);
+    }
+  };
+
+  const handlePayosPaid = () => {
+    setPayosQr(null);
+    Alert.alert('Thanh toán thành công 🎉', 'Vé của bạn đã được xác nhận!', [
+      { text: 'Xem vé', onPress: () => router.replace('/user/(tabs)/tickets' as Href) },
+    ]);
+  };
+
+  const handlePayosCancel = (reason: 'user' | 'expired' | 'cancelled_on_payos') => {
+    const orderCode = payosQr?.orderCode;
+    setPayosQr(null);
+    if (orderCode) bookingService.cancelPendingOrder(orderCode).catch(() => {});
+    if (reason === 'expired') {
+      Alert.alert('Hết hạn thanh toán', 'Mã QR đã hết hạn và đơn đặt vé đã được hủy.');
+    } else if (reason === 'cancelled_on_payos') {
+      Alert.alert('Đã hủy thanh toán', 'Đơn đặt vé đã được hủy.');
     }
   };
 
@@ -902,6 +909,16 @@ export default function RealBookingScreen() {
           }
         </Pressable>
       </View>
+
+      <PayosQrModal
+        visible={Boolean(payosQr)}
+        qrCode={payosQr?.code ?? null}
+        amountVnd={payosQr?.amountVnd}
+        paymentQrUrl={API_ENDPOINTS.PAYMENT_QR_TICKETS}
+        onCheckStatus={() => bookingService.checkPayosStatus(payosQr!.orderCode)}
+        onPaid={handlePayosPaid}
+        onCancel={handlePayosCancel}
+      />
     </SafeAreaView>
   );
 }

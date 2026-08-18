@@ -100,6 +100,13 @@ async function refreshAccessToken(): Promise<string | null> {
   }
 }
 
+/** Header Authorization hiện tại — dùng cho các request không đi qua apiClient.request, VD ảnh QR
+ * thanh toán PayOS render qua <Image source={{ uri, headers }}> (expo-image hỗ trợ headers tuỳ chỉnh). */
+export async function getAuthHeader(): Promise<Record<string, string>> {
+  const token = await getFreshAccessToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function getFreshAccessToken(): Promise<string | null> {
   if (accessToken && !isJwtExpired(accessToken, 30_000)) {
     return accessToken;

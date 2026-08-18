@@ -55,8 +55,13 @@ export type CheckoutResponse = {
   amountVnd?: number;
   payos?: {
     checkoutUrl?: string;
+    /** Chuỗi VietQR — render QR ngay trong app thay vì mở trình duyệt ngoài. */
+    qrCode?: string;
+    status?: string;
   };
 };
+
+export type PayosStatus = 'PENDING' | 'PAID' | 'CANCELLED';
 
 type RawRecord = Record<string, unknown>;
 
@@ -206,5 +211,11 @@ export const bookingService = {
   /** Chỉ hủy được đơn vé đang ở trạng thái "pending" (chưa thanh toán) — khớp hành vi web. */
   async cancelPendingOrder(payosOrderCode: number) {
     return apiClient.post(API_ENDPOINTS.CANCEL_PENDING_TICKETS, { payosOrderCode });
+  },
+
+  /** Poll trong khi hiển thị QR trong app — KHÔNG throw khi còn PENDING (khác confirmPayos). */
+  async checkPayosStatus(payosOrderCode: number): Promise<PayosStatus> {
+    const data = (await apiClient.get(API_ENDPOINTS.PAYOS_STATUS_TICKETS(payosOrderCode))) as CheckoutResponse;
+    return (data?.payos?.status as PayosStatus) ?? 'PENDING';
   },
 };
