@@ -6,7 +6,9 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTickets, Ticket } from '@/context/TicketContext';
+import { useTickets, Ticket, Transaction } from '@/context/TicketContext';
+import { apiClient } from '@/api/client';
+import { API_ENDPOINTS } from '@/api/config';
 
 /* ── Theme ── */
 const NAVY   = '#0d0e28';
@@ -158,6 +160,83 @@ const card = StyleSheet.create({
     paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6,
   },
   badgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.3 },
+  price: { fontSize: 13, fontWeight: '800', color: YELLOW },
+});
+
+/* ── Food order / Points log card (khớp web TransactionHistory.jsx) ── */
+function formatTxDate(value?: string) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return value;
+  return `${d.toLocaleDateString('vi-VN')} · ${d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+const TX_STATUS_LABEL: Record<string, { label: string; color: string }> = {
+  completed: { label: 'Hoàn thành', color: GREEN },
+  cancelled: { label: 'Đã hủy', color: RED },
+  pending:   { label: 'Chờ xử lý', color: YELLOW },
+};
+
+function FoodOrderCard({ tx }: { tx: Transaction }) {
+  const st = TX_STATUS_LABEL[tx.status || ''] || TX_STATUS_LABEL.pending;
+  const items = tx.items || [];
+  return (
+    <View style={txCard.root}>
+      <View style={txCard.iconWrap}>
+        <Ionicons name="fast-food-outline" size={20} color={PINK} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={txCard.title} numberOfLines={1}>
+          {items.map((i) => i.label).filter(Boolean).join(', ') || 'Đơn bắp nước'}
+        </Text>
+        <Text style={txCard.sub}>{formatTxDate(tx.createdAt)}</Text>
+        <View style={txCard.footer}>
+          <View style={[txCard.badge, { backgroundColor: st.color + '22' }]}>
+            <Text style={[txCard.badgeText, { color: st.color }]}>{st.label}</Text>
+          </View>
+          <Text style={txCard.price}>{Number(tx.finalAmount || 0).toLocaleString('vi-VN')}đ</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function PointsLogCard({ tx }: { tx: Transaction }) {
+  const item = tx.items?.[0];
+  const points = Number(item?.price || 0);
+  const positive = points > 0;
+  return (
+    <View style={txCard.root}>
+      <View style={[txCard.iconWrap, { backgroundColor: 'rgba(212,226,25,0.12)' }]}>
+        <Ionicons name="star-outline" size={20} color={YELLOW} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={txCard.title} numberOfLines={1}>{item?.label || 'Điểm thưởng'}</Text>
+        <Text style={txCard.sub}>{formatTxDate(tx.createdAt)}</Text>
+      </View>
+      <Text style={[txCard.price, { color: positive ? GREEN : RED }]}>
+        {positive ? '+' : ''}{points.toLocaleString('vi-VN')} pts
+      </Text>
+    </View>
+  );
+}
+
+const txCard = StyleSheet.create({
+  root: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: CARD, borderRadius: 16, borderWidth: 1, borderColor: BORDER,
+    padding: 14, marginBottom: 12,
+  },
+  iconWrap: {
+    width: 42, height: 42, borderRadius: 12,
+    backgroundColor: 'rgba(233,30,140,0.12)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  title: { fontSize: 14, fontWeight: '800', color: WHITE, marginBottom: 4 },
+  sub: { fontSize: 11, color: MUTED, marginBottom: 6 },
+  footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  badgeText: { fontSize: 10, fontWeight: '800' },
   price: { fontSize: 13, fontWeight: '800', color: YELLOW },
 });
 
@@ -380,8 +459,29 @@ export default function TicketsScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Khớp web TransactionHistory.jsx: cùng 1 danh sách giao dịch có 3 loại (vé/bắp nước/điểm).
+  const [activeTab, setActiveTab] = useState<'ticket_online' | 'food' | 'points'>('ticket_online');
+  const [foodOrders, setFoodOrders] = useState<Transaction[]>([]);
+  const [pointsLogs, setPointsLogs] = useState<Transaction[]>([]);
+  const [loadingOthers, setLoadingOthers] = useState(false);
+
+  const fetchOtherTransactions = useCallback(async () => {
+    setLoadingOthers(true);
+    try {
+      const data = await apiClient.get(API_ENDPOINTS.MY_TRANSACTIONS);
+      const list = Array.isArray(data) ? (data as Transaction[]) : [];
+      setFoodOrders(list.filter((t) => t.type === 'food'));
+      setPointsLogs(list.filter((t) => t.type === 'points'));
+    } catch {
+      setFoodOrders([]);
+      setPointsLogs([]);
+    } finally {
+      setLoadingOthers(false);
+    }
+  }, []);
+
   useFocusEffect(
-    useCallback(() => { fetchTickets(); }, [fetchTickets])
+    useCallback(() => { fetchTickets(); fetchOtherTransactions(); }, [fetchTickets, fetchOtherTransactions])
   );
 
   useEffect(() => {
@@ -392,7 +492,7 @@ export default function TicketsScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchTickets();
+    await Promise.all([fetchTickets(), fetchOtherTransactions()]);
     setRefreshing(false);
   };
 
@@ -419,6 +519,16 @@ export default function TicketsScreen() {
     );
   };
 
+  const isTicketTab = activeTab === 'ticket_online';
+  const activeLoading = isTicketTab ? loading : loadingOthers;
+  const activeCount = isTicketTab ? tickets.length : activeTab === 'food' ? foodOrders.length : pointsLogs.length;
+
+  const TABS: { key: typeof activeTab; label: string; icon: React.ComponentProps<typeof Ionicons>['name']; count: number }[] = [
+    { key: 'ticket_online', label: 'Vé xem phim', icon: 'ticket-outline', count: tickets.length },
+    { key: 'food', label: 'Bắp nước', icon: 'fast-food-outline', count: foodOrders.length },
+    { key: 'points', label: 'Điểm', icon: 'star-outline', count: pointsLogs.length },
+  ];
+
   return (
     <SafeAreaView style={styles.container}>
 
@@ -426,28 +536,51 @@ export default function TicketsScreen() {
       <View style={styles.header}>
         <View style={styles.headerBadge}>
           <Ionicons name="ticket" size={13} color={YELLOW} />
-          <Text style={styles.headerTitle}>VÉ CỦA TÔI</Text>
+          <Text style={styles.headerTitle}>GIAO DỊCH CỦA TÔI</Text>
         </View>
         <Pressable onPress={onRefresh} hitSlop={10} style={styles.refreshBtn}>
           <Ionicons name="refresh-outline" size={18} color={MUTED} />
         </Pressable>
       </View>
 
+      {/* Tabs — khớp web TransactionHistory.jsx (vé / bắp nước / điểm) */}
+      <View style={styles.tabBar}>
+        {TABS.map((t) => {
+          const active = t.key === activeTab;
+          return (
+            <Pressable
+              key={t.key}
+              style={[styles.tabBtn, active && styles.tabBtnActive]}
+              onPress={() => setActiveTab(t.key)}
+            >
+              <Ionicons name={t.icon} size={14} color={active ? '#0d0e28' : MUTED} />
+              <Text style={[styles.tabBtnText, active && styles.tabBtnTextActive]} numberOfLines={1}>
+                {t.label}{t.count > 0 ? ` (${t.count})` : ''}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
       {/* Loading */}
-      {loading && !refreshing && (
+      {activeLoading && !refreshing && (
         <View style={styles.loadingWrap}>
           <ActivityIndicator color={YELLOW} size="large" />
         </View>
       )}
 
       {/* Empty */}
-      {!loading && tickets.length === 0 && (
+      {!activeLoading && activeCount === 0 && (
         <View style={styles.empty}>
           <View style={styles.emptyIconWrap}>
-            <Ionicons name="ticket-outline" size={52} color={DIM} />
+            <Ionicons name={TABS.find((t) => t.key === activeTab)!.icon} size={52} color={DIM} />
           </View>
-          <Text style={styles.emptyTitle}>Chưa có vé nào</Text>
-          <Text style={styles.emptySub}>Hãy chọn phim yêu thích và đặt vé ngay!</Text>
+          <Text style={styles.emptyTitle}>
+            {isTicketTab ? 'Chưa có vé nào' : activeTab === 'food' ? 'Chưa có đơn bắp nước nào' : 'Chưa có lịch sử điểm'}
+          </Text>
+          <Text style={styles.emptySub}>
+            {isTicketTab ? 'Hãy chọn phim yêu thích và đặt vé ngay!' : activeTab === 'food' ? 'Đặt bắp nước để xem lịch sử tại đây.' : 'Mua vé/bắp nước để bắt đầu tích điểm.'}
+          </Text>
           <Pressable style={styles.emptyRefreshBtn} onPress={onRefresh}>
             <Ionicons name="refresh-outline" size={14} color={YELLOW} />
             <Text style={styles.emptyRefreshText}>Tải lại</Text>
@@ -455,8 +588,8 @@ export default function TicketsScreen() {
         </View>
       )}
 
-      {/* List */}
-      {tickets.length > 0 && (
+      {/* List: Vé xem phim */}
+      {!activeLoading && isTicketTab && tickets.length > 0 && (
         <FlatList
           data={tickets}
           keyExtractor={(item) => item.id}
@@ -469,12 +602,35 @@ export default function TicketsScreen() {
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={YELLOW}
-              colors={[YELLOW]}
-            />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={YELLOW} colors={[YELLOW]} />
+          }
+        />
+      )}
+
+      {/* List: Bắp nước */}
+      {!activeLoading && activeTab === 'food' && foodOrders.length > 0 && (
+        <FlatList
+          data={foodOrders}
+          keyExtractor={(item, i) => String(item.id ?? item.orderCode ?? i)}
+          renderItem={({ item }) => <FoodOrderCard tx={item} />}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={YELLOW} colors={[YELLOW]} />
+          }
+        />
+      )}
+
+      {/* List: Điểm thưởng */}
+      {!activeLoading && activeTab === 'points' && pointsLogs.length > 0 && (
+        <FlatList
+          data={pointsLogs}
+          keyExtractor={(item, i) => String(item.id ?? item.orderCode ?? i)}
+          renderItem={({ item }) => <PointsLogCard tx={item} />}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={YELLOW} colors={[YELLOW]} />
           }
         />
       )}
@@ -513,6 +669,21 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: BORDER,
   },
+
+  /* Tabs */
+  tabBar: {
+    flexDirection: 'row', gap: 8,
+    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4,
+  },
+  tabBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
+    paddingVertical: 9, borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1, borderColor: BORDER,
+  },
+  tabBtnActive: { backgroundColor: YELLOW, borderColor: YELLOW },
+  tabBtnText: { fontSize: 11, fontWeight: '700', color: MUTED },
+  tabBtnTextActive: { color: '#0d0e28' },
 
   /* Loading / empty */
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },

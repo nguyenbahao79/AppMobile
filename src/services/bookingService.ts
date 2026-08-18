@@ -162,8 +162,10 @@ export const bookingService = {
       : [];
   },
 
+  /** @returns `warning` = true nếu tài khoản đang giữ/huỷ ghế bất thường nhiều lần — hiện cảnh báo nguy cơ khoá tài khoản. */
   async holdSeats(showtimeId: number, holderId: string, seatIds: number[]) {
-    await apiClient.post(API_ENDPOINTS.HOLD_SEATS, { showtimeId, holderId, seatIds });
+    const data = await apiClient.post(API_ENDPOINTS.HOLD_SEATS, { showtimeId, holderId, seatIds });
+    return (data as { warning?: boolean } | null)?.warning === true;
   },
 
   /** Ghế đang được người khác (khác holderId) giữ tạm — dùng để hiện trạng thái "đang được giữ". */

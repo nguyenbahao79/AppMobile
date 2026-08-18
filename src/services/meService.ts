@@ -45,6 +45,15 @@ export type PointsHistoryRow = {
   points: number;
 };
 
+export type MembershipRank = {
+  id: number;
+  rankName: string;
+  minSpending: number;
+  discountPercent: number;
+  bonusPoint?: number;
+  description?: string;
+};
+
 export const meService = {
   async getFavorites() {
     const data = await apiClient.get(API_ENDPOINTS.MY_FAVORITES);
@@ -79,5 +88,12 @@ export const meService = {
   async getPointsHistory() {
     const data = await apiClient.get(API_ENDPOINTS.POINTS_HISTORY);
     return Array.isArray(data) ? (data as PointsHistoryRow[]) : [];
+  },
+
+  /** Danh sách hạng thành viên thật từ BE (không hardcode) — sắp theo minSpending tăng dần. */
+  async getMembershipRanks() {
+    const data = await apiClient.get(API_ENDPOINTS.MEMBERSHIP_RANKS);
+    const ranks = Array.isArray(data) ? (data as MembershipRank[]) : [];
+    return [...ranks].sort((a, b) => Number(a.minSpending ?? 0) - Number(b.minSpending ?? 0));
   },
 };

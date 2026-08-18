@@ -9,6 +9,7 @@ import { IconSymbol } from '@/components/base/icon-symbol';
 import { useAuth } from '@/context/AuthContext';
 import { voucherService, PublicVoucher } from '@/services/voucherService';
 import { meService, MyVoucher } from '@/services/meService';
+import { cinemaService, Cinema } from '@/services/cinemaService';
 
 /* ── Theme ───────────────────────────────────────────────────────── */
 const C = {
@@ -71,7 +72,6 @@ function voucherState(uv: MyVoucher): { label: string; color: string } {
 function VoucherDetailModal({ uv, onClose }: { uv: MyVoucher; onClose: () => void }) {
   const v     = uv.voucher;
   const state = voucherState(uv);
-  const isActive = state.label === 'Còn hạn';
 
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
@@ -155,6 +155,12 @@ function WalletCard({ uv, onPress }: { uv: MyVoucher; onPress: () => void }) {
           </View>
         </View>
         <Text style={s.vDiscount}>{fmtDiscount(v)}</Text>
+        {!!v?.cinemaName && (
+          <View style={s.vCinemaRow}>
+            <IconSymbol name="mappin.and.ellipse" size={10} color={C.muted} />
+            <Text style={s.vCinemaText} numberOfLines={1}>{v.cinemaName}</Text>
+          </View>
+        )}
         <View style={s.vDivider} />
         <View style={s.vMeta}>
           <Text style={s.vMetaText}>Min: {fmtVnd(v?.minOrderValue ?? 0)}</Text>
@@ -195,6 +201,12 @@ function CatalogCard({
           )}
         </View>
         <Text style={s.vDiscount}>{fmtDiscount(item)}</Text>
+        {!!item.cinemaName && (
+          <View style={s.vCinemaRow}>
+            <IconSymbol name="mappin.and.ellipse" size={10} color={C.muted} />
+            <Text style={s.vCinemaText} numberOfLines={1}>{item.cinemaName}</Text>
+          </View>
+        )}
         <View style={s.vDivider} />
         <Text style={s.vMetaText}>Min: {fmtVnd(item.minOrderValue)}</Text>
       </View>
@@ -239,26 +251,47 @@ export default function VouchersScreen() {
   const [redeemingId,setRedeemingId]= useState<number | null>(null);
   const [selected,   setSelected]   = useState<MyVoucher | null>(null);
 
-  const load = useCallback(async () => {
+  // Kho voucher chỉ tải khi đã chọn rạp — mỗi voucher chỉ áp dụng đúng 1 rạp (khớp web Vouchers.jsx).
+  const [cinemas,          setCinemas]          = useState<Cinema[]>([]);
+  const [cinemasLoading,   setCinemasLoading]   = useState(true);
+  const [selectedCinemaId, setSelectedCinemaId] = useState<number | null>(null);
+  const [showCinemaPicker, setShowCinemaPicker] = useState(false);
+
+  useFocusEffect(useCallback(() => {
+    cinemaService.getCinemas()
+      .then((list) => {
+        setCinemas(list);
+        setSelectedCinemaId((cur) => cur ?? (list[0]?.cinemaId ?? null));
+      })
+      .catch(() => setCinemas([]))
+      .finally(() => setCinemasLoading(false));
+  }, []));
+
+  const loadWallet = useCallback(async () => {
     try {
-      const [cat, wal] = await Promise.all([
-        voucherService.getPublicVouchers(),
-        meService.getMyVouchers().catch(() => [] as MyVoucher[]),
-      ]);
-      setCatalog(cat.filter(v => v.status === 1));
+      const wal = await meService.getMyVouchers().catch(() => [] as MyVoucher[]);
       setWallet(wal);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  const loadCatalog = useCallback(async () => {
+    if (!selectedCinemaId) { setCatalog([]); return; }
+    const cat = await voucherService.getPublicVouchers(selectedCinemaId).catch(() => [] as PublicVoucher[]);
+    setCatalog(cat.filter(v => v.status === 1));
+  }, [selectedCinemaId]);
+
+  useFocusEffect(useCallback(() => { loadWallet(); }, [loadWallet]));
+  useFocusEffect(useCallback(() => { loadCatalog(); }, [loadCatalog]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load();
+    await Promise.all([loadWallet(), loadCatalog()]);
     setRefreshing(false);
-  }, [load]);
+  }, [loadWallet, loadCatalog]);
+
+  const selectedCinema = cinemas.find(c => c.cinemaId === selectedCinemaId) || null;
 
   const redeemedIds = useMemo(() => new Set(wallet.map(w => w.voucher?.id).filter(Boolean)), [wallet]);
 
@@ -267,7 +300,7 @@ export default function VouchersScreen() {
     try {
       await meService.redeemVoucher(voucher.id);
       Alert.alert('Thành công', 'Voucher đã được thêm vào ví của bạn.');
-      await load();
+      await Promise.all([loadWallet(), loadCatalog()]);
     } catch (err: any) {
       Alert.alert('Không đổi được', err.message || 'Vui lòng thử lại sau.');
     } finally {
@@ -396,17 +429,34 @@ export default function VouchersScreen() {
           showsVerticalScrollIndicator={false}
           refreshControl={rc}
           ListHeaderComponent={
-            <View style={s.catalogHint}>
-              <IconSymbol name="star.fill" size={13} color={C.yellow} />
-              <Text style={s.catalogHintText}>
-                Bạn có <Text style={{ color: C.yellow, fontWeight: '700' }}>{myPoints} điểm</Text> — đổi lấy voucher bên dưới
-              </Text>
-            </View>
+            <>
+              {/* Chọn rạp — mỗi voucher chỉ áp dụng đúng 1 rạp */}
+              <Pressable
+                style={s.cinemaPickBox}
+                onPress={() => setShowCinemaPicker(true)}
+                disabled={cinemasLoading}
+              >
+                <IconSymbol name="mappin.and.ellipse" size={15} color={C.purple} />
+                <Text style={s.cinemaPickText} numberOfLines={1}>
+                  {cinemasLoading ? 'Đang tải danh sách rạp...' : selectedCinema?.name || 'Chọn rạp để xem kho voucher'}
+                </Text>
+                <IconSymbol name="chevron.down" size={13} color={C.dim} />
+              </Pressable>
+
+              <View style={s.catalogHint}>
+                <IconSymbol name="star.fill" size={13} color={C.yellow} />
+                <Text style={s.catalogHintText}>
+                  Bạn có <Text style={{ color: C.yellow, fontWeight: '700' }}>{myPoints} điểm</Text> — đổi lấy voucher bên dưới
+                </Text>
+              </View>
+            </>
           }
           ListEmptyComponent={
             <View style={s.emptyWrap}>
               <IconSymbol name="gift.fill" size={40} color={C.purple + '50'} />
-              <Text style={s.emptyTitle}>Chưa có voucher nào trong kho</Text>
+              <Text style={s.emptyTitle}>
+                {selectedCinemaId ? 'Chưa có voucher nào trong kho của rạp này' : 'Vui lòng chọn rạp để xem kho voucher'}
+              </Text>
             </View>
           }
           renderItem={({ item }) => (
@@ -425,6 +475,36 @@ export default function VouchersScreen() {
       {selected && (
         <VoucherDetailModal uv={selected} onClose={() => setSelected(null)} />
       )}
+
+      {/* Cinema picker modal */}
+      <Modal visible={showCinemaPicker} animationType="slide" transparent onRequestClose={() => setShowCinemaPicker(false)}>
+        <Pressable style={m.overlay} onPress={() => setShowCinemaPicker(false)}>
+          <Pressable style={m.sheet} onPress={e => e.stopPropagation()}>
+            <View style={m.handle} />
+            <Text style={m.title}>CHỌN <Text style={{ color: C.yellow }}>RẠP</Text></Text>
+            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+              {cinemas.map((c) => (
+                <TouchableOpacity
+                  key={c.cinemaId}
+                  style={s.cinemaOption}
+                  onPress={() => { setSelectedCinemaId(c.cinemaId); setShowCinemaPicker(false); }}
+                  activeOpacity={0.8}
+                >
+                  <IconSymbol
+                    name={c.cinemaId === selectedCinemaId ? 'checkmark.circle.fill' : 'mappin.and.ellipse'}
+                    size={16}
+                    color={c.cinemaId === selectedCinemaId ? C.purple : C.dim}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.cinemaOptionName}>{c.name}</Text>
+                    <Text style={s.cinemaOptionAddr} numberOfLines={1}>{c.address}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -507,6 +587,8 @@ const s = StyleSheet.create({
   },
   vStatusText:  { fontSize: 10, fontWeight: '700' },
   vDiscount:    { fontSize: 22, fontWeight: '800', color: C.yellow, marginBottom: 8 },
+  vCinemaRow:   { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 },
+  vCinemaText:  { fontSize: 11, color: C.muted, flexShrink: 1 },
   vDivider:     { height: StyleSheet.hairlineWidth, backgroundColor: C.divider, marginBottom: 8 },
   vMeta:        { flexDirection: 'row', justifyContent: 'space-between' },
   vMetaText:    { fontSize: 11, color: C.muted },
@@ -524,6 +606,20 @@ const s = StyleSheet.create({
     paddingHorizontal: 14, margin: 12, gap: 4,
   },
   redeemText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+
+  /* Cinema pick box */
+  cinemaPickBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    padding: 12, marginBottom: 10, borderRadius: 12,
+    backgroundColor: C.card, borderWidth: 1, borderColor: C.border,
+  },
+  cinemaPickText: { flex: 1, fontSize: 13, fontWeight: '700', color: C.text },
+  cinemaOption: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.divider,
+  },
+  cinemaOptionName: { fontSize: 14, fontWeight: '700', color: C.text, marginBottom: 2 },
+  cinemaOptionAddr: { fontSize: 11, color: C.muted },
 
   /* Catalog hint */
   catalogHint: {

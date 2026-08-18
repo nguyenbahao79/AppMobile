@@ -4,6 +4,7 @@ import {
   TextInput, Alert, ActivityIndicator, Pressable, SafeAreaView, Platform,
 } from 'react-native';
 import { router } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { IconSymbol } from '@/components/base/icon-symbol';
 import { apiClient } from '@/api/client';
 import { API_ENDPOINTS } from '@/api/config';
@@ -91,6 +92,8 @@ export default function EditProfileScreen() {
   const [errors,   setErrors]   = useState<Record<string, string>>({});
   const [saving,   setSaving]   = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState('');
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   // birthday không có trong session → fetch thêm từ API
   useEffect(() => {
@@ -108,8 +111,48 @@ export default function EditProfileScreen() {
     }
   }, [user?.userId]);
 
-  const avatarUrl  = user?.avatar?.trim() || '';
+  const avatarUrl  = avatarPreview || user?.avatar?.trim() || '';
   const rankName   = user?.rankName || user?.membershipRankName || 'Đồng';
+
+  const pickAvatar = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Cần quyền truy cập', 'Vui lòng cho phép ứng dụng truy cập thư viện ảnh để đổi ảnh đại diện.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+      base64: true,
+    });
+    if (result.canceled || !result.assets?.[0]?.base64) return;
+    if (!user?.userId) { Alert.alert('Lỗi', 'Bạn cần đăng nhập lại.'); return; }
+
+    const asset = result.assets[0];
+    const mime = asset.mimeType || 'image/jpeg';
+    const dataUrl = `data:${mime};base64,${asset.base64}`;
+    setAvatarPreview(dataUrl);
+    setUploadingAvatar(true);
+    try {
+      const updated = await apiClient.put(API_ENDPOINTS.USER_DETAIL(user.userId), {
+        fullname: user.fullname,
+        email: user.email,
+        phone: user.phone,
+        birthday: birthday || null,
+        status: (user as any).status ?? 1,
+        avatar: dataUrl,
+      });
+      updateSessionUser({ ...user, ...(updated as typeof user) });
+      Alert.alert('Thành công', 'Đã cập nhật ảnh đại diện.');
+    } catch (err: any) {
+      setAvatarPreview('');
+      Alert.alert('Lỗi cập nhật ảnh', err.message || 'Vui lòng thử lại.');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   const startEdit = () => {
     setErrors({});
@@ -183,8 +226,16 @@ export default function EditProfileScreen() {
                 <Text style={s.avatarInitials}>{getInitials(user?.fullname)}</Text>
               </View>
             )}
-            <TouchableOpacity style={s.cameraBtn} activeOpacity={0.8}>
-              <IconSymbol name="camera.fill" size={13} color="#fff" />
+            <TouchableOpacity
+              style={s.cameraBtn}
+              activeOpacity={0.8}
+              onPress={pickAvatar}
+              disabled={uploadingAvatar}
+            >
+              {uploadingAvatar
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <IconSymbol name="camera.fill" size={13} color="#fff" />
+              }
             </TouchableOpacity>
           </View>
           <Text style={s.avatarName}>{user?.fullname || 'Khách hàng'}</Text>

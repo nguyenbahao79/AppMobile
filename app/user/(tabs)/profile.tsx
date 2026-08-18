@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import { useRouter, Href, useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/base/icon-symbol';
 import { useAuth } from '@/context/AuthContext';
 import { useTickets } from '@/context/TicketContext';
+import { meService, MembershipRank } from '@/services/meService';
 
 // ─── Web theme colors ─────────────────────────────────────────────────────────
 const C = {
@@ -28,25 +29,28 @@ const C = {
   divider:  'rgba(255,255,255,0.06)',
 } as const;
 
-// ─── Rank config ──────────────────────────────────────────────────────────────
-const RANKS = [
-  { label: 'Đồng',     color: '#CD7F32', minSpend: 0,         maxSpend: 500_000   },
-  { label: 'Bạc',      color: '#9E9E9E', minSpend: 500_000,   maxSpend: 2_000_000 },
-  { label: 'Vàng',     color: '#FFD700', minSpend: 2_000_000, maxSpend: 5_000_000 },
-  { label: 'Bạch Kim', color: '#B0C4DE', minSpend: 5_000_000, maxSpend: null      },
-];
+// ─── Rank helpers ─────────────────────────────────────────────────────────────
+// BE không trả màu theo hạng — chỉ dùng bảng màu này để tô viền/badge cho đẹp mắt,
+// mọi dữ liệu khác (tên hạng, ngưỡng chi tiêu, % giảm giá, điểm thưởng) lấy thật từ API
+// (giống web `TabRank` trong Profile.jsx), không còn hardcode.
+const RANK_COLORS = ['#CD7F32', '#9E9E9E', '#FFD700', '#B0C4DE', '#7b1fa2', '#e91e8c'];
+const FALLBACK_COLOR = '#9E9E9E';
 
-function detectRank(name?: string) {
-  const n = (name ?? '').toLowerCase();
-  if (n.includes('platinum') || n.includes('bạch')) return RANKS[3];
-  if (n.includes('gold')     || n.includes('vàng')) return RANKS[2];
-  if (n.includes('silver')   || n.includes('bạc'))  return RANKS[1];
-  return RANKS[0];
+/** Khớp logic web: hạng hiện tại = hạng có minSpending lớn nhất mà tổng chi tiêu vẫn >= nó. */
+function findCurrentRankIndex(ranks: MembershipRank[], totalSpending: number) {
+  let idx = -1;
+  for (let i = 0; i < ranks.length; i++) {
+    if (totalSpending >= Number(ranks[i].minSpending ?? 0)) idx = i;
+  }
+  return idx;
 }
 
-function calcProgress(spending: number, rank: typeof RANKS[0]) {
-  if (!rank.maxSpend) return 100;
-  return Math.min(100, Math.max(0, ((spending - rank.minSpend) / (rank.maxSpend - rank.minSpend)) * 100));
+function calcProgress(spending: number, current: MembershipRank | null, next: MembershipRank | null) {
+  if (!next) return 100;
+  const curMin  = Number(current?.minSpending ?? 0);
+  const nextMin = Number(next.minSpending ?? 0);
+  if (nextMin <= curMin) return 0;
+  return Math.min(100, Math.max(0, ((spending - curMin) / (nextMin - curMin)) * 100));
 }
 
 function fmtMoney(v: number) {
@@ -82,19 +86,24 @@ export default function ProfileScreen() {
   const { session, logout, refreshUser } = useAuth();
   const { tickets }                      = useTickets();
 
-  useFocusEffect(useCallback(() => { refreshUser(); }, []));
+  const [ranks, setRanks] = useState<MembershipRank[]>([]);
+
+  useFocusEffect(useCallback(() => {
+    refreshUser();
+    meService.getMembershipRanks().then(setRanks).catch(() => {});
+  }, []));
   const user = session?.user;
 
   const avatarUrl     = user?.avatar?.trim() || '';
-  const rankName      = user?.rankName || user?.membershipRankName || '';
-  const rank          = detectRank(rankName);
-  const rankIdx       = RANKS.indexOf(rank);
-  const nextRank      = rankIdx < RANKS.length - 1 ? RANKS[rankIdx + 1] : null;
   const totalSpending = user?.totalSpending ?? 0;
-  const rankProgress  = calcProgress(totalSpending, rank);
-  const spendToNext   = nextRank ? Math.max(0, nextRank.minSpend - totalSpending) : 0;
+  const rankIdx       = findCurrentRankIndex(ranks, totalSpending);
+  const currentRank   = rankIdx >= 0 ? ranks[rankIdx] : null;
+  const nextRank      = rankIdx >= 0 && rankIdx < ranks.length - 1 ? ranks[rankIdx + 1] : (ranks.length && rankIdx < 0 ? ranks[0] : null);
+  const rankColor     = RANK_COLORS[Math.max(0, rankIdx) % RANK_COLORS.length] || FALLBACK_COLOR;
+  const rankLabel     = user?.rankName || currentRank?.rankName || '—';
+  const rankProgress  = calcProgress(totalSpending, currentRank, nextRank);
+  const spendToNext   = nextRank ? Math.max(0, Number(nextRank.minSpending ?? 0) - totalSpending) : 0;
   const usedCount     = tickets.filter(t => t.status === 'used').length;
-  const activeCount   = tickets.filter(t => t.status === 'active').length;
 
   const menuSections: { title: string; items: MenuItem[] }[] = [
     {
@@ -153,13 +162,13 @@ export default function ProfileScreen() {
           <View style={styles.heroBody}>
             <Pressable onPress={() => router.push('/user/edit-profile' as Href)} style={styles.avatarWrap}>
               {avatarUrl ? (
-                <Image source={{ uri: avatarUrl }} style={[styles.avatar, { borderColor: rank.color }]} />
+                <Image source={{ uri: avatarUrl }} style={[styles.avatar, { borderColor: rankColor }]} />
               ) : (
-                <View style={[styles.avatar, styles.avatarFallback, { borderColor: rank.color }]}>
+                <View style={[styles.avatar, styles.avatarFallback, { borderColor: rankColor }]}>
                   <Text style={styles.avatarInitials}>{getInitials(user?.fullname)}</Text>
                 </View>
               )}
-              <View style={[styles.cameraBtn, { backgroundColor: rank.color }]}>
+              <View style={[styles.cameraBtn, { backgroundColor: rankColor }]}>
                 <IconSymbol name="camera.fill" size={9} color="#fff" />
               </View>
             </Pressable>
@@ -171,9 +180,9 @@ export default function ProfileScreen() {
               <Text style={styles.heroEmail} numberOfLines={1}>
                 {user?.email || user?.phone || ''}
               </Text>
-              <View style={[styles.rankBadge, { borderColor: rank.color + '80' }]}>
-                <View style={[styles.rankDot, { backgroundColor: rank.color }]} />
-                <Text style={[styles.rankBadgeText, { color: rank.color }]}>Hạng {rank.label}</Text>
+              <View style={[styles.rankBadge, { borderColor: rankColor + '80' }]}>
+                <View style={[styles.rankDot, { backgroundColor: rankColor }]} />
+                <Text style={[styles.rankBadgeText, { color: rankColor }]}>Hạng {rankLabel}</Text>
               </View>
             </View>
 
@@ -206,53 +215,62 @@ export default function ProfileScreen() {
           <Text style={styles.sectionTitle}>Hạng thành viên</Text>
           <View style={styles.rankCard}>
             <View style={styles.rankHeader}>
-              <View style={[styles.rankIconWrap, { backgroundColor: rank.color + '22' }]}>
-                <IconSymbol name="medal.fill" size={26} color={rank.color} />
+              <View style={[styles.rankIconWrap, { backgroundColor: rankColor + '22' }]}>
+                <IconSymbol name="medal.fill" size={26} color={rankColor} />
               </View>
               <View style={styles.rankHeaderText}>
-                <Text style={[styles.rankTitle, { color: rank.color }]}>Hạng {rank.label}</Text>
+                <Text style={[styles.rankTitle, { color: rankColor }]}>Hạng {rankLabel}</Text>
                 <Text style={styles.rankSub}>
                   {nextRank
-                    ? `Còn ${fmtMoney(spendToNext)}đ để lên hạng ${nextRank.label}`
-                    : 'Bạn đã đạt hạng cao nhất!'}
+                    ? `Còn ${fmtMoney(spendToNext)}đ để lên hạng ${nextRank.rankName}`
+                    : ranks.length ? 'Bạn đã đạt hạng cao nhất!' : ''}
                 </Text>
               </View>
             </View>
 
             <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${rankProgress}%` as any, backgroundColor: rank.color }]} />
+              <View style={[styles.progressFill, { width: `${rankProgress}%` as any, backgroundColor: rankColor }]} />
             </View>
             <View style={styles.progressLabelRow}>
-              <Text style={styles.progressLabel}>{rank.label}</Text>
-              {nextRank && <Text style={styles.progressLabel}>{nextRank.label}</Text>}
+              <Text style={styles.progressLabel}>{rankLabel}</Text>
+              {nextRank && <Text style={styles.progressLabel}>{nextRank.rankName}</Text>}
             </View>
 
             <View style={styles.ranksRow}>
-              {RANKS.map((r, i) => (
-                <View key={i} style={styles.rankStep}>
-                  <View style={[styles.rankStepDot, {
-                    backgroundColor: rankIdx >= i ? r.color : r.color + '22',
-                    borderColor: r.color,
-                  }]}>
-                    <IconSymbol name="star.fill" size={12} color={rankIdx >= i ? '#fff' : r.color + '80'} />
+              {ranks.map((r, i) => {
+                const c = RANK_COLORS[i % RANK_COLORS.length] || FALLBACK_COLOR;
+                return (
+                  <View key={r.id ?? i} style={styles.rankStep}>
+                    <View style={[styles.rankStepDot, {
+                      backgroundColor: rankIdx >= i ? c : c + '22',
+                      borderColor: c,
+                    }]}>
+                      <IconSymbol name="star.fill" size={12} color={rankIdx >= i ? '#fff' : c + '80'} />
+                    </View>
+                    <Text style={[styles.rankStepLabel, { color: rankIdx >= i ? c : C.muted }]}>
+                      {r.rankName}
+                    </Text>
                   </View>
-                  <Text style={[styles.rankStepLabel, { color: rankIdx >= i ? r.color : C.muted }]}>
-                    {r.label}
-                  </Text>
-                </View>
-              ))}
+                );
+              })}
             </View>
 
-            <View style={styles.benefitRow}>
-              <View style={styles.benefit}>
-                <IconSymbol name="percent" size={13} color={rank.color} />
-                <Text style={styles.benefitText}>Giảm {rankIdx * 5 + 5}% mỗi vé</Text>
+            {currentRank && (
+              <View style={styles.benefitRow}>
+                {currentRank.discountPercent > 0 && (
+                  <View style={styles.benefit}>
+                    <IconSymbol name="percent" size={13} color={rankColor} />
+                    <Text style={styles.benefitText}>Giảm {currentRank.discountPercent}% mỗi vé</Text>
+                  </View>
+                )}
+                {currentRank.bonusPoint != null && (
+                  <View style={styles.benefit}>
+                    <IconSymbol name="star.circle.fill" size={13} color={rankColor} />
+                    <Text style={styles.benefitText}>+{currentRank.bonusPoint} điểm thưởng</Text>
+                  </View>
+                )}
               </View>
-              <View style={styles.benefit}>
-                <IconSymbol name="star.circle.fill" size={13} color={rank.color} />
-                <Text style={styles.benefitText}>x{(rankIdx + 1).toFixed(1)} điểm thưởng</Text>
-              </View>
-            </View>
+            )}
           </View>
         </View>
 

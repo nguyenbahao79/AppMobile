@@ -95,6 +95,7 @@ export const API_ENDPOINTS = {
   NEWS_LIST: '/news',
   NEWS_DETAIL: (id: string | number) => `/news/${id}`,
   MOVIE_REVIEWS: (movieId: string | number) => `/movies/${movieId}/reviews`,
+  MEMBERSHIP_RANKS: '/membership-ranks',
   
   // BOOKING & TICKETS
   QUOTE_TICKETS: '/ticket-orders/quote',

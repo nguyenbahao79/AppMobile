@@ -73,8 +73,14 @@ function isSeatLocked(seat: Seat, selectedShowtime?: Showtime | null) {
   );
 }
 
-function checkNoSingleSeatOrphanInRows(allSeats: Seat[], blockedSeatIds: Set<number>) {
-  if (!allSeats.length) return { ok: true };
+/**
+ * Khớp BE SeatLayoutRules / web seatLayoutRules.js: không chừa đúng 1 ghế trống kẹp giữa hai
+ * ghế đã chiếm trên cùng hàng. Chỉ báo lỗi khi CHÍNH lựa chọn hiện tại làm phát sinh ghế mồ côi
+ * MỚI — nếu ghế mồ côi đã tồn tại sẵn (vd. do quầy bán vé tạo ra ở giao dịch khác), không chặn
+ * các lựa chọn khác không liên quan.
+ */
+function findOrphanSeatIds(allSeats: Seat[], blockedSeatIds: Set<number>) {
+  const orphans = new Set<number>();
   const byRow = new Map<string, Seat[]>();
   allSeats.forEach((seat) => {
     const row = seat.row || '?';
@@ -88,14 +94,37 @@ function checkNoSingleSeatOrphanInRows(allSeats: Seat[], blockedSeatIds: Set<num
       const left  = sorted[i - 1];
       const right = sorted[i + 1];
       if (left && blockedSeatIds.has(left.seatId) && right && blockedSeatIds.has(right.seatId)) {
-        return {
-          ok: false,
-          message: `Không được chừa 1 ghế trống lẻ giữa hàng (${seatLabel(current)}). Hãy chọn thêm ghế bên cạnh hoặc bỏ ghế khác.`,
-        };
+        orphans.add(current.seatId);
       }
     }
   }
-  return { ok: true };
+  return orphans;
+}
+
+function checkNoNewSingleSeatOrphanInRows(
+  allSeats: Seat[],
+  existingBlockedSeatIds: Set<number>,
+  newlySelectedSeatIds: number[]
+) {
+  if (!allSeats.length) return { ok: true as const };
+
+  const orphansBefore = findOrphanSeatIds(allSeats, existingBlockedSeatIds);
+
+  const after = new Set(existingBlockedSeatIds);
+  newlySelectedSeatIds.forEach((id) => after.add(id));
+  const orphansAfter = findOrphanSeatIds(allSeats, after);
+
+  for (const id of orphansAfter) {
+    if (!orphansBefore.has(id)) {
+      const seat = allSeats.find((s) => s.seatId === id);
+      const label = seat ? seatLabel(seat) : '';
+      return {
+        ok: false as const,
+        message: `Không được chừa 1 ghế trống lẻ giữa hàng (ghế ${label}). Chọn thêm ghế bên cạnh hoặc bỏ ghế khác.`,
+      };
+    }
+  }
+  return { ok: true as const };
 }
 
 function makeHolderId() {
@@ -132,6 +161,7 @@ export default function RealBookingScreen() {
   const [selectedVoucher,  setSelectedVoucher]  = useState<MyVoucher | null>(null);
   const [showVoucherPicker, setShowVoucherPicker] = useState(false);
   const [peerHeldSeatIds,  setPeerHeldSeatIds]  = useState<number[]>([]);
+  const [abuseWarning,     setAbuseWarning]     = useState(false);
 
   const selectedShowtime = useMemo(
     () => showtimes.find((s) => s.id === selectedShowtimeId) ?? null,
@@ -215,7 +245,9 @@ export default function RealBookingScreen() {
   useEffect(() => {
     if (!selectedShowtime) return;
     const t = setTimeout(() => {
-      bookingService.holdSeats(selectedShowtime.id, holderId, selectedSeatIds).catch(() => {});
+      bookingService.holdSeats(selectedShowtime.id, holderId, selectedSeatIds)
+        .then((warning) => setAbuseWarning(warning))
+        .catch(() => {});
     }, 400);
     return () => clearTimeout(t);
   }, [holderId, selectedSeatIds, selectedShowtime]);
@@ -280,11 +312,10 @@ export default function RealBookingScreen() {
     setQuote(null);
     setSelectedSeatIds((cur) => {
       if (cur.includes(seat.seatId)) return cur.filter((id) => id !== seat.seatId);
-      const blocked = new Set<number>();
-      seats.forEach((s) => { if (isSeatLocked(s, selectedShowtime)) blocked.add(s.seatId); });
-      cur.forEach((id) => blocked.add(id));
-      blocked.add(seat.seatId);
-      const rule = checkNoSingleSeatOrphanInRows(seats, blocked);
+      const existingBlocked = new Set<number>();
+      seats.forEach((s) => { if (isSeatLocked(s, selectedShowtime)) existingBlocked.add(s.seatId); });
+      cur.forEach((id) => existingBlocked.add(id));
+      const rule = checkNoNewSingleSeatOrphanInRows(seats, existingBlocked, [seat.seatId]);
       if (!rule.ok) { Alert.alert('Không thể chọn ghế này', rule.message); return cur; }
       return [...cur, seat.seatId];
     });
@@ -650,6 +681,15 @@ export default function RealBookingScreen() {
                 <Text style={s.seatNote}>
                   Không được chừa 1 ghế trống lẻ giữa hàng • Ghế đôi tính giá cho 2 người
                 </Text>
+
+                {abuseWarning && (
+                  <View style={s.abuseWarningBox}>
+                    <Ionicons name="warning-outline" size={18} color="#ff6b7a" />
+                    <Text style={s.abuseWarningText}>
+                      Bạn đang giữ/huỷ ghế nhiều lần liên tục trong thời gian ngắn. Nếu tiếp tục, tài khoản sẽ bị khoá.
+                    </Text>
+                  </View>
+                )}
               </>
             )}
           </View>
@@ -939,6 +979,12 @@ const s = StyleSheet.create({
   legendDot:   { width: 14, height: 14, borderRadius: 4 },
   legendLabel: { fontSize: 11, color: MUTED },
   seatNote:    { textAlign: 'center', fontSize: 11, color: MUTED, marginTop: 10, lineHeight: 17, paddingHorizontal: 16 },
+  abuseWarningBox: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    backgroundColor: 'rgba(220,53,69,0.15)', borderWidth: 1, borderColor: 'rgba(220,53,69,0.4)',
+    borderRadius: 10, padding: 12, marginTop: 12, marginHorizontal: 16,
+  },
+  abuseWarningText: { flex: 1, fontSize: 12, lineHeight: 17, color: '#ff6b7a' },
 
   // Section header
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },

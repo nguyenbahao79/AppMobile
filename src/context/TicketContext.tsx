@@ -29,10 +29,12 @@ export interface Ticket {
   showDateRaw?: string;
 }
 
-type TransactionItem = {
+export type TransactionItem = {
   label?: string;
   sub?: string;
   price?: number;
+  qty?: number;
+  icon?: string;
   ticketId?: number;
   ticketCode?: string;
   qrToken?: string;
@@ -45,13 +47,16 @@ type TransactionItem = {
   cinemaAddress?: string;
 };
 
-type Transaction = {
+export type Transaction = {
   id?: string | number;
   orderCode?: string | number;
   type?: string;
   status?: string;
   items?: TransactionItem[];
+  originalAmount?: number;
+  discountAmount?: number;
   finalAmount?: number;
+  pointsEarned?: number;
   createdAt?: string;
 };
 

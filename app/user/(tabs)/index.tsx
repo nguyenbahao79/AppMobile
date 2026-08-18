@@ -1,18 +1,15 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  StyleSheet, ScrollView, View, Text, TouchableOpacity, FlatList,
-  Dimensions, ActivityIndicator, TextInput, RefreshControl, Modal,
+  StyleSheet, ScrollView, View, Text, TouchableOpacity,
+  ActivityIndicator, TextInput, RefreshControl, Modal,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { movieService } from '@/services/movieService';
-import { newsService, NewsItem } from '@/services/newsService';
 import { Movie } from '@/mocks/movies';
 import { useAuth } from '@/context/AuthContext';
-
-const { width: SW } = Dimensions.get('window');
 
 const NAVY   = '#0d0d2b';
 const CARD   = '#14143a';
@@ -47,104 +44,6 @@ const sh = StyleSheet.create({
   bar: { width: 44, height: 3, backgroundColor: PURPLE, borderRadius: 2, marginTop: 6 },
   btn: { borderWidth: 1, borderColor: 'rgba(212,255,0,0.3)', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(212,255,0,0.05)', marginTop: 4 },
   btnText: { fontSize: 11, fontWeight: '800', color: YELLOW, letterSpacing: 0.5 },
-});
-
-/* ─────────────────────────────── News slider ── */
-function NewsSlider({ news }: { news: NewsItem[] }) {
-  const listRef = useRef<FlatList>(null);
-  const [current, setCurrent] = useState(0);
-  const currentRef = useRef(0);
-
-  useEffect(() => {
-    if (news.length <= 1) return;
-    const t = setInterval(() => {
-      const next = (currentRef.current + 1) % news.length;
-      currentRef.current = next;
-      setCurrent(next);
-      listRef.current?.scrollToIndex({ index: next, animated: true });
-    }, 3500);
-    return () => clearInterval(t);
-  }, [news.length]);
-
-  if (!news.length) return null;
-
-  return (
-    <View style={ns.wrap}>
-      <View style={ns.headerRow}>
-        <Text style={ns.label}>TIN TỨC & SỰ KIỆN</Text>
-        <TouchableOpacity onPress={() => router.push('/user/news' as Href)}>
-          <Text style={ns.more}>Xem tất cả →</Text>
-        </TouchableOpacity>
-      </View>
-
-      <FlatList
-        ref={listRef}
-        data={news}
-        keyExtractor={(item) => String(item.id)}
-        horizontal
-        pagingEnabled={false}
-        snapToInterval={SW - 28}
-        decelerationRate="fast"
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={ns.content}
-        getItemLayout={(_, i) => ({ length: SW - 28, offset: 20 + i * (SW - 28), index: i })}
-        onMomentumScrollEnd={(e) => {
-          const idx = Math.round(e.nativeEvent.contentOffset.x / (SW - 28));
-          currentRef.current = idx;
-          setCurrent(idx);
-        }}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={ns.slide}
-            activeOpacity={0.88}
-            onPress={() => router.push(`/user/news/${item.id}` as Href)}
-          >
-            {item.image
-              ? <Image source={item.image} style={ns.image} contentFit="cover" />
-              : <View style={[ns.image, ns.imgPlaceholder]}>
-                  <Ionicons name="newspaper-outline" size={40} color={MUTED} />
-                </View>
-            }
-            <View style={ns.overlay}>
-              <View style={ns.badge}>
-                <Text style={ns.badgeText}>TIN TỨC</Text>
-              </View>
-              <Text style={ns.slideTitle} numberOfLines={2}>{item.title}</Text>
-              {item.createdAt && (
-                <Text style={ns.slideDate}>{new Date(item.createdAt).toLocaleDateString('vi-VN')}</Text>
-              )}
-            </View>
-          </TouchableOpacity>
-        )}
-      />
-
-      {news.length > 1 && (
-        <View style={ns.dots}>
-          {news.map((_, i) => (
-            <View key={i} style={[ns.dot, i === current && ns.dotActive]} />
-          ))}
-        </View>
-      )}
-    </View>
-  );
-}
-const ns = StyleSheet.create({
-  wrap: { marginBottom: 28 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12 },
-  label: { fontSize: 11, fontWeight: '800', color: PINK, letterSpacing: 1.5 },
-  more: { fontSize: 11, fontWeight: '700', color: YELLOW },
-  content: { paddingHorizontal: 20 },
-  slide: { width: SW - 40, height: 185, borderRadius: 16, overflow: 'hidden', backgroundColor: CARD, marginRight: 12 },
-  image: { width: '100%', height: '100%' },
-  imgPlaceholder: { alignItems: 'center', justifyContent: 'center' },
-  overlay: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.52)', padding: 14 },
-  badge: { backgroundColor: PINK, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start', marginBottom: 7 },
-  badgeText: { fontSize: 9, fontWeight: '800', color: '#fff', letterSpacing: 1 },
-  slideTitle: { fontSize: 15, fontWeight: 'bold', color: '#fff', lineHeight: 21 },
-  slideDate: { fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 4 },
-  dots: { flexDirection: 'row', justifyContent: 'center', marginTop: 10, gap: 5 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.2)' },
-  dotActive: { width: 18, backgroundColor: YELLOW },
 });
 
 /* ─────────────────────────────── Movie card ── */
@@ -239,128 +138,6 @@ function MovieGrid({ movies, showBuyBtn }: { movies: Movie[]; showBuyBtn: boolea
   );
 }
 
-/* ─────────────────────────────── Review card ── */
-type Review = { reviewId?: number; rating: number; comment?: string; userName?: string; userAvatar?: string; createdAt?: string };
-
-function ReviewCard({ review }: { review: Review }) {
-  const initial = (review.userName || '?').charAt(0).toUpperCase();
-  return (
-    <View style={rv.card}>
-      <View style={rv.header}>
-        {review.userAvatar
-          ? <Image source={review.userAvatar} style={rv.avatar} contentFit="cover" />
-          : (
-            <View style={rv.avatarCircle}>
-              <Text style={rv.avatarText}>{initial}</Text>
-            </View>
-          )
-        }
-        <View style={{ flex: 1 }}>
-          <Text style={rv.name}>{review.userName || 'Người dùng'}</Text>
-          <View style={rv.starsRow}>
-            {[1, 2, 3, 4, 5].map((s) => (
-              <Ionicons key={s} name="star" size={11} color={s <= review.rating ? '#FFD700' : 'rgba(255,255,255,0.15)'} />
-            ))}
-            {review.createdAt && (
-              <Text style={rv.date}>{new Date(review.createdAt).toLocaleDateString('vi-VN')}</Text>
-            )}
-          </View>
-        </View>
-      </View>
-      {!!review.comment && <Text style={rv.comment} numberOfLines={3}>{review.comment}</Text>}
-    </View>
-  );
-}
-const rv = StyleSheet.create({
-  card: { backgroundColor: CARD, borderRadius: 12, padding: 14, marginHorizontal: 20, marginBottom: 12, borderWidth: 1, borderColor: BORDER },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
-  avatar: { width: 38, height: 38, borderRadius: 19 },
-  avatarCircle: { width: 38, height: 38, borderRadius: 19, backgroundColor: PURPLE, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 15, fontWeight: 'bold', color: '#fff' },
-  name: { fontSize: 13, fontWeight: '700', color: WHITE },
-  starsRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 3 },
-  date: { fontSize: 10, color: MUTED, marginLeft: 8 },
-  comment: { fontSize: 13, color: MUTED, lineHeight: 19 },
-});
-
-/* ─────────────────────────────── Reviews section ── */
-function ReviewsSection({ movies }: { movies: Movie[] }) {
-  const [selectedIdx, setSelectedIdx] = useState(0);
-  const [reviews, setReviews] = useState<Review[]>([]);
-  const [busy, setBusy] = useState(false);
-
-  const fetchReviews = useCallback(async (idx: number) => {
-    const movie = movies[idx];
-    if (!movie) return;
-    setBusy(true);
-    setReviews([]);
-    try {
-      const data = await movieService.getMovieReviews(movie.id);
-      setReviews((data as Review[]).slice(0, 10));
-    } catch {
-      setReviews([]);
-    } finally {
-      setBusy(false);
-    }
-  }, [movies]);
-
-  useEffect(() => {
-    if (movies.length) fetchReviews(0);
-  }, [movies, fetchReviews]);
-
-  const handleTabPress = (i: number) => {
-    setSelectedIdx(i);
-    fetchReviews(i);
-  };
-
-  if (!movies.length) return null;
-
-  return (
-    <View style={styles.section}>
-      <SectionHeader pre="BÌNH LUẬN &" accent="ĐÁNH GIÁ" />
-
-      {/* Movie tabs */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 20, gap: 8, marginBottom: 16 }}
-      >
-        {movies.map((m, i) => (
-          <TouchableOpacity
-            key={m.id}
-            style={[rvs.tab, i === selectedIdx && rvs.tabActive]}
-            onPress={() => handleTabPress(i)}
-          >
-            <Text style={[rvs.tabText, i === selectedIdx && rvs.tabTextActive]} numberOfLines={1}>
-              {m.title}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      {busy
-        ? <ActivityIndicator color={YELLOW} style={{ marginVertical: 24 }} />
-        : reviews.length === 0
-          ? (
-            <View style={rvs.empty}>
-              <Ionicons name="chatbubbles-outline" size={40} color={MUTED} />
-              <Text style={rvs.emptyText}>Chưa có bình luận nào</Text>
-            </View>
-          )
-          : reviews.map((r, i) => <ReviewCard key={r.reviewId ?? i} review={r} />)
-      }
-    </View>
-  );
-}
-const rvs = StyleSheet.create({
-  tab: { borderWidth: 1, borderColor: BORDER, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: 'rgba(255,255,255,0.04)', maxWidth: 160 },
-  tabActive: { backgroundColor: PURPLE, borderColor: PURPLE },
-  tabText: { fontSize: 12, fontWeight: '600', color: MUTED },
-  tabTextActive: { color: '#fff' },
-  empty: { alignItems: 'center', paddingVertical: 30 },
-  emptyText: { color: MUTED, fontSize: 13, marginTop: 10 },
-});
-
 /* ─────────────────────────────── Search results ── */
 function SearchResults({ movies, query, genre }: { movies: Movie[]; query: string; genre: string | null }) {
   const results = movies
@@ -368,7 +145,7 @@ function SearchResults({ movies, query, genre }: { movies: Movie[]; query: strin
     .filter((m) => !genre || m.genre.includes(genre));
   return (
     <View style={styles.section}>
-      <Text style={sr.hint}>{results.length} kết quả cho "{query}"</Text>
+      <Text style={sr.hint}>{results.length} kết quả cho &quot;{query}&quot;</Text>
       <MovieGrid movies={results} showBuyBtn />
     </View>
   );
@@ -418,7 +195,6 @@ const gm = StyleSheet.create({
 export default function HomeScreen() {
   const { session } = useAuth();
   const [movies, setMovies] = useState<Movie[]>([]);
-  const [news, setNews] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
@@ -427,12 +203,8 @@ export default function HomeScreen() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [moviesData, newsData] = await Promise.all([
-        movieService.getAllMovies(),
-        newsService.getNewsList(),
-      ]);
+      const moviesData = await movieService.getAllMovies();
       setMovies(moviesData);
-      setNews(newsData);
     } catch {}
   }, []);
 
@@ -465,7 +237,6 @@ export default function HomeScreen() {
     () => movies.filter((m) => m.status !== 1 && (!selectedGenre || m.genre.includes(selectedGenre))).slice(0, 8),
     [movies, selectedGenre]
   );
-  const reviewMovies = nowPlaying.slice(0, 5);
   const userName = session?.user?.fullname?.split(' ').pop() || 'bạn';
   const isSearching = search.trim().length > 0;
 
@@ -488,9 +259,6 @@ export default function HomeScreen() {
           <Text style={styles.greeting}>Xin chào,</Text>
           <Text style={styles.userName}>{userName}</Text>
         </View>
-        <TouchableOpacity style={styles.notifBtn} onPress={() => {}}>
-          <Ionicons name="notifications-outline" size={22} color={WHITE} />
-        </TouchableOpacity>
       </View>
 
       {/* Search + Filter */}
@@ -576,14 +344,9 @@ export default function HomeScreen() {
           <SearchResults movies={movies} query={search} genre={selectedGenre} />
         ) : (
           <>
-            {/* News slider */}
-            <View style={{ marginTop: 16 }}>
-              <NewsSlider news={news} />
-            </View>
-
             {/* Now Playing */}
             {nowPlaying.length > 0 && (
-              <View style={styles.section}>
+              <View style={[styles.section, { marginTop: 16 }]}>
                 <SectionHeader pre="PHIM" accent="ĐANG CHIẾU" />
                 <MovieGrid movies={nowPlaying} showBuyBtn />
               </View>
@@ -596,9 +359,6 @@ export default function HomeScreen() {
                 <MovieGrid movies={comingSoon} showBuyBtn={false} />
               </View>
             )}
-
-            {/* Reviews */}
-            <ReviewsSection movies={reviewMovies} />
           </>
         )}
       </ScrollView>
@@ -627,16 +387,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: WHITE,
-  },
-  notifBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: CARD,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: BORDER,
   },
   searchArea: {
     flexDirection: 'row',
