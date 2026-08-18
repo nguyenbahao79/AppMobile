@@ -53,7 +53,7 @@ export default function StaffTabLayout() {
     if (activeShift === undefined) return;
     const onShiftsPage = pathname.includes('/staff/shifts');
     if (!activeShift && !onShiftsPage) {
-      router.replace('/staff/shifts');
+      router.navigate('/staff/shifts');
     }
   }, [activeShift, pathname]);
 
