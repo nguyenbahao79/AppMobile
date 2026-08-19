@@ -49,7 +49,10 @@ const isCoupleSeat = (seat: Seat) => {
 const formatDate = (value?: string) => {
   if (!value) return '—';
   const date = new Date(`${value}T00:00:00`);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('vi-VN');
+  if (Number.isNaN(date.getTime())) return value;
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${mm}/${dd}/${date.getFullYear()}`;
 };
 
 const sortSeats = (items: Seat[]) =>
@@ -205,9 +208,11 @@ export default function RealBookingScreen() {
           bookingService.getShowtimesByMovie(String(id)),
         ]);
         if (!mounted) return;
+        // Chỉ hiện suất "Sắp chiếu" — khớp cách lọc ở POS (Sales.jsx), ẩn suất đã bắt đầu/đã chiếu xong.
+        const upcoming = showtimeData.filter((st) => st.status === 'Sắp chiếu');
         setMovie(movieData);
-        setShowtimes(showtimeData);
-        setSelectedShowtimeId(showtimeData[0]?.id ?? null);
+        setShowtimes(upcoming);
+        setSelectedShowtimeId(upcoming[0]?.id ?? null);
       } catch (e: any) {
         Alert.alert('Không tải được dữ liệu đặt vé', e.message || 'Vui lòng kiểm tra kết nối.');
       } finally {
