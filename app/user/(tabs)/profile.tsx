@@ -192,22 +192,30 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* ── Stats Grid ── */}
+        {/* ── Stats Grid (2 thẻ/hàng) ── */}
         <View style={styles.statsRow}>
-          {([
-            { label: 'Vé đã đặt',   value: String(tickets.length), icon: 'ticket.fill',    color: C.pink   },
-            { label: 'Đã xem',       value: String(usedCount),       icon: 'film.fill',      color: C.purple },
-            { label: 'Điểm thưởng', value: String(user?.points ?? 0), icon: 'star.fill',    color: C.yellow },
-            { label: 'Chi tiêu',     value: fmtMoney(totalSpending),  icon: 'banknote.fill', color: '#34C759'},
-          ] as const).map((s, i) => (
-            <View key={i} style={styles.statCard}>
-              <View style={[styles.statIconWrap, { backgroundColor: s.color + '22' }]}>
-                <IconSymbol name={s.icon as any} size={17} color={s.color} />
+          {(() => {
+            const items = [
+              { label: 'Vé đã đặt',   value: String(tickets.length), icon: 'ticket.fill',    color: C.pink   },
+              { label: 'Đã xem',       value: String(usedCount),       icon: 'film.fill',      color: C.purple },
+              { label: 'Điểm thưởng', value: String(user?.points ?? 0), icon: 'star.fill',    color: C.yellow },
+              { label: 'Chi tiêu',     value: fmtMoney(totalSpending),  icon: 'banknote.fill', color: '#34C759'},
+            ] as const;
+            const pairs = [items.slice(0, 2), items.slice(2, 4)];
+            return pairs.map((pair, rowIdx) => (
+              <View key={rowIdx} style={styles.statPairRow}>
+                {pair.map((s, i) => (
+                  <View key={i} style={styles.statCard}>
+                    <View style={[styles.statIconWrap, { backgroundColor: s.color + '22' }]}>
+                      <IconSymbol name={s.icon as any} size={17} color={s.color} />
+                    </View>
+                    <Text style={styles.statValue}>{s.value}</Text>
+                    <Text style={styles.statLabel}>{s.label}</Text>
+                  </View>
+                ))}
               </View>
-              <Text style={styles.statValue}>{s.value}</Text>
-              <Text style={styles.statLabel}>{s.label}</Text>
-            </View>
-          ))}
+            ));
+          })()}
         </View>
 
         {/* ── Rank Progress ── */}
@@ -389,9 +397,10 @@ const styles = StyleSheet.create({
   },
 
   // ── Stats ──
-  statsRow: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 12, marginBottom: 6 },
+  statsRow: { paddingHorizontal: 12, marginBottom: 6, gap: 10 },
+  statPairRow: { flexDirection: 'row', gap: 10 },
   statCard: {
-    width: '47%', margin: '1.5%',
+    flex: 1,
     padding: 14, borderRadius: 18,
     backgroundColor: C.card,
     borderWidth: 1, borderColor: C.border,
