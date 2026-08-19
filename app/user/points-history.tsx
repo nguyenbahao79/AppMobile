@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList, SafeAreaView,
   ActivityIndicator, RefreshControl, Platform, Pressable, TouchableOpacity,
@@ -34,37 +34,57 @@ function fmtNumber(n: number) {
   return Math.abs(n).toLocaleString('vi-VN');
 }
 
+const PAGE_SIZE = 10;
+
 /* ── Main Screen ─────────────────────────────────────────────────── */
 export default function PointsHistoryScreen() {
   const { session } = useAuth();
   const currentPoints = session?.user?.points ?? 0;
 
-  const [rows,       setRows]       = useState<PointsHistoryRow[]>([]);
-  const [loading,    setLoading]    = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [rows,        setRows]        = useState<PointsHistoryRow[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [refreshing,  setRefreshing]  = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore,     setHasMore]     = useState(true);
+  const [totalItems,  setTotalItems]  = useState(0);
+  const nextPageRef = useRef(0);
 
-  const fetchPoints = useCallback(async () => {
+  const fetchPoints = useCallback(async (reset: boolean) => {
     try {
-      const data = await meService.getPointsHistory();
-      setRows(data);
+      const targetPage = reset ? 0 : nextPageRef.current;
+      const data = await meService.getPointsHistoryPage(targetPage, PAGE_SIZE);
+      setRows(prev => (reset ? data.content : [...prev, ...data.content]));
+      nextPageRef.current = targetPage + 1;
+      setHasMore(targetPage + 1 < data.totalPages);
+      setTotalItems(data.totalElements);
     } catch {
       // giữ danh sách cũ nếu lỗi mạng
+    } finally {
+      setLoadingMore(false);
     }
   }, []);
 
   useFocusEffect(useCallback(() => {
     let cancelled = false;
     setLoading(true);
-    fetchPoints().finally(() => { if (!cancelled) setLoading(false); });
+    fetchPoints(true).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [fetchPoints]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchPoints();
+    await fetchPoints(true);
     setRefreshing(false);
   }, [fetchPoints]);
 
+  const handleEndReached = () => {
+    if (loadingMore || !hasMore || loading) return;
+    setLoadingMore(true);
+    fetchPoints(false);
+  };
+
+  // Lưu ý: tổng "Đã nhận"/"Đã dùng" chỉ tính trên các dòng ĐÃ TẢI (trang hiện tại trở về trước),
+  // không phải tổng toàn bộ lịch sử — chấp nhận đánh đổi vì BE không có endpoint tổng hợp riêng.
   const totalEarned = useMemo(
     () => rows.filter(r => r.points > 0).reduce((s, r) => s + r.points, 0), [rows]
   );
@@ -119,6 +139,8 @@ export default function PointsHistoryScreen() {
           keyExtractor={item => String(item.pointHistoryId)}
           contentContainerStyle={s.list}
           showsVerticalScrollIndicator={false}
+          onEndReached={handleEndReached}
+          onEndReachedThreshold={0.4}
           refreshControl={
             <RefreshControl
               refreshing={refreshing} onRefresh={onRefresh}
@@ -153,7 +175,7 @@ export default function PointsHistoryScreen() {
                   </View>
                   <View style={s.statDivider} />
                   <View style={s.statCell}>
-                    <Text style={[s.statVal, { color: C.text }]}>{rows.length}</Text>
+                    <Text style={[s.statVal, { color: C.text }]}>{totalItems}</Text>
                     <Text style={s.statLabel}>Giao dịch</Text>
                   </View>
                 </View>
@@ -176,7 +198,7 @@ export default function PointsHistoryScreen() {
                   <Text style={s.historyTitle}>
                     LỊCH SỬ <Text style={{ color: C.yellow }}>GIAO DỊCH</Text>
                   </Text>
-                  <Text style={s.historyCount}>{rows.length} giao dịch</Text>
+                  <Text style={s.historyCount}>{totalItems} giao dịch</Text>
                 </View>
               )}
             </>
@@ -190,6 +212,11 @@ export default function PointsHistoryScreen() {
               <Text style={s.emptySubt}>Đặt vé và mua đồ ăn để tích điểm.</Text>
             </View>
           }
+          ListFooterComponent={loadingMore ? (
+            <View style={{ paddingVertical: 20 }}>
+              <ActivityIndicator size="small" color={C.purple} />
+            </View>
+          ) : null}
           renderItem={renderItem}
         />
       )}

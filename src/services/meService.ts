@@ -54,10 +54,29 @@ export type MembershipRank = {
   description?: string;
 };
 
+export type PagedResult<T> = {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+};
+
+function emptyPage<T>(page: number, size: number): PagedResult<T> {
+  return { content: [], page, size, totalElements: 0, totalPages: 0 };
+}
+
 export const meService = {
+  /** Toàn bộ yêu thích (không phân trang) — dùng cho các nơi chỉ cần kiểm tra/tra cứu, VD trang chi tiết phim. */
   async getFavorites() {
-    const data = await apiClient.get(API_ENDPOINTS.MY_FAVORITES);
-    return Array.isArray(data) ? (data as FavoriteMovie[]) : [];
+    const data = await this.getFavoritesPage(0, 100);
+    return data.content;
+  },
+
+  /** Phân trang thật — dùng cho màn hình "Phim yêu thích" (danh sách dài, cuộn tải thêm). */
+  async getFavoritesPage(page = 0, size = 10) {
+    const data = await apiClient.get(`${API_ENDPOINTS.MY_FAVORITES}?page=${page}&size=${size}`);
+    return (data as PagedResult<FavoriteMovie>) ?? emptyPage<FavoriteMovie>(page, size);
   },
 
   async addFavorite(movieId: number) {
@@ -76,18 +95,32 @@ export const meService = {
     return apiClient.put(API_ENDPOINTS.MOVIE_REVIEW_BY_MOVIE(movieId), { rating, comment }) as Promise<MovieReview>;
   },
 
+  /** Toàn bộ voucher trong ví (không phân trang) — dùng khi cần lọc nhanh lúc thanh toán. */
   async getMyVouchers() {
-    const data = await apiClient.get(API_ENDPOINTS.MY_VOUCHERS);
-    return Array.isArray(data) ? (data as MyVoucher[]) : [];
+    const data = await this.getMyVouchersPage(0, 100);
+    return data.content;
+  },
+
+  /** Phân trang thật — dùng cho màn hình "Ví voucher". */
+  async getMyVouchersPage(page = 0, size = 10) {
+    const data = await apiClient.get(`${API_ENDPOINTS.MY_VOUCHERS}?page=${page}&size=${size}`);
+    return (data as PagedResult<MyVoucher>) ?? emptyPage<MyVoucher>(page, size);
   },
 
   async redeemVoucher(voucherId: number) {
     await apiClient.post(API_ENDPOINTS.REDEEM_VOUCHER, { voucherId });
   },
 
+  /** Toàn bộ lịch sử điểm (không phân trang). */
   async getPointsHistory() {
-    const data = await apiClient.get(API_ENDPOINTS.POINTS_HISTORY);
-    return Array.isArray(data) ? (data as PointsHistoryRow[]) : [];
+    const data = await this.getPointsHistoryPage(0, 100);
+    return data.content;
+  },
+
+  /** Phân trang thật — dùng cho màn hình "Lịch sử điểm". */
+  async getPointsHistoryPage(page = 0, size = 10) {
+    const data = await apiClient.get(`${API_ENDPOINTS.POINTS_HISTORY}?page=${page}&size=${size}`);
+    return (data as PagedResult<PointsHistoryRow>) ?? emptyPage<PointsHistoryRow>(page, size);
   },
 
   /** Danh sách hạng thành viên thật từ BE (không hardcode) — sắp theo minSpending tăng dần. */

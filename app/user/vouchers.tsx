@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList, Pressable, SafeAreaView,
   ActivityIndicator, Alert, RefreshControl, Platform, TouchableOpacity,
@@ -235,6 +235,8 @@ function CatalogCard({
   );
 }
 
+const PAGE_SIZE = 10;
+
 /* ── Main Screen ─────────────────────────────────────────────────── */
 type FilterKey = 'all' | 'active' | 'used';
 
@@ -246,10 +248,18 @@ export default function VouchersScreen() {
   const [filter,     setFilter]     = useState<FilterKey>('all');
   const [catalog,    setCatalog]    = useState<PublicVoucher[]>([]);
   const [wallet,     setWallet]     = useState<MyVoucher[]>([]);
+  const [walletTotal,setWalletTotal]= useState(0);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMoreWallet, setLoadingMoreWallet] = useState(false);
+  const [hasMoreWallet,     setHasMoreWallet]     = useState(true);
+  const nextWalletPageRef = useRef(0);
   const [redeemingId,setRedeemingId]= useState<number | null>(null);
   const [selected,   setSelected]   = useState<MyVoucher | null>(null);
+  // Danh sách ID voucher đã có trong ví (không phân trang, tối đa 100) — chỉ để tra cứu nhanh
+  // "đã đổi chưa" cho tab Kho voucher, tách khỏi `wallet` (đang phân trang) để không bị thiếu ID
+  // của các voucher nằm ở trang chưa tải.
+  const [redeemedVoucherIds, setRedeemedVoucherIds] = useState<Set<number>>(new Set());
 
   // Kho voucher chỉ tải khi đã chọn rạp — mỗi voucher chỉ áp dụng đúng 1 rạp (khớp web Vouchers.jsx).
   const [cinemas,          setCinemas]          = useState<Cinema[]>([]);
@@ -267,13 +277,23 @@ export default function VouchersScreen() {
       .finally(() => setCinemasLoading(false));
   }, []));
 
-  const loadWallet = useCallback(async () => {
+  const loadWallet = useCallback(async (reset: boolean) => {
     try {
-      const wal = await meService.getMyVouchers().catch(() => [] as MyVoucher[]);
-      setWallet(wal);
+      const targetPage = reset ? 0 : nextWalletPageRef.current;
+      const data = await meService.getMyVouchersPage(targetPage, PAGE_SIZE);
+      setWallet(prev => (reset ? data.content : [...prev, ...data.content]));
+      nextWalletPageRef.current = targetPage + 1;
+      setHasMoreWallet(targetPage + 1 < data.totalPages);
+      setWalletTotal(data.totalElements);
     } finally {
       setLoading(false);
+      setLoadingMoreWallet(false);
     }
+  }, []);
+
+  const loadRedeemedIds = useCallback(async () => {
+    const all = await meService.getMyVouchers().catch(() => [] as MyVoucher[]);
+    setRedeemedVoucherIds(new Set(all.map(w => w.voucher?.id).filter((id): id is number => id != null)));
   }, []);
 
   const loadCatalog = useCallback(async () => {
@@ -282,25 +302,29 @@ export default function VouchersScreen() {
     setCatalog(cat.filter(v => v.status === 1));
   }, [selectedCinemaId]);
 
-  useFocusEffect(useCallback(() => { loadWallet(); }, [loadWallet]));
+  useFocusEffect(useCallback(() => { loadWallet(true); loadRedeemedIds(); }, [loadWallet, loadRedeemedIds]));
   useFocusEffect(useCallback(() => { loadCatalog(); }, [loadCatalog]));
+
+  const handleWalletEndReached = () => {
+    if (loadingMoreWallet || !hasMoreWallet || loading) return;
+    setLoadingMoreWallet(true);
+    loadWallet(false);
+  };
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([loadWallet(), loadCatalog()]);
+    await Promise.all([loadWallet(true), loadRedeemedIds(), loadCatalog()]);
     setRefreshing(false);
-  }, [loadWallet, loadCatalog]);
+  }, [loadWallet, loadRedeemedIds, loadCatalog]);
 
   const selectedCinema = cinemas.find(c => c.cinemaId === selectedCinemaId) || null;
-
-  const redeemedIds = useMemo(() => new Set(wallet.map(w => w.voucher?.id).filter(Boolean)), [wallet]);
 
   const handleRedeem = async (voucher: PublicVoucher) => {
     setRedeemingId(voucher.id);
     try {
       await meService.redeemVoucher(voucher.id);
       Alert.alert('Thành công', 'Voucher đã được thêm vào ví của bạn.');
-      await Promise.all([loadWallet(), loadCatalog()]);
+      await Promise.all([loadWallet(true), loadRedeemedIds(), loadCatalog()]);
     } catch (err: any) {
       Alert.alert('Không đổi được', err.message || 'Vui lòng thử lại sau.');
     } finally {
@@ -308,7 +332,8 @@ export default function VouchersScreen() {
     }
   };
 
-  /* Stats for wallet */
+  /* Stats for wallet — "Tổng" lấy từ tổng thật (BE), riêng "Còn hạn"/"Đã dùng" chỉ tính trên các
+     dòng đã tải (không có endpoint tổng hợp riêng theo trạng thái). */
   const statsActive   = wallet.filter(uv => voucherState(uv).label === 'Còn hạn').length;
   const statsInactive = wallet.length - statsActive;
 
@@ -371,12 +396,19 @@ export default function VouchersScreen() {
           contentContainerStyle={s.list}
           showsVerticalScrollIndicator={false}
           refreshControl={rc}
+          onEndReached={handleWalletEndReached}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={loadingMoreWallet ? (
+            <View style={{ paddingVertical: 20 }}>
+              <ActivityIndicator size="small" color={C.purple} />
+            </View>
+          ) : null}
           ListHeaderComponent={
             <>
               {/* Stats row */}
               <View style={s.statsRow}>
                 {([
-                  { label: 'Tổng',           val: wallet.length,    color: C.text   },
+                  { label: 'Tổng',           val: walletTotal,      color: C.text   },
                   { label: 'Còn hạn',        val: statsActive,      color: C.green  },
                   { label: 'Đã dùng/hết hạn',val: statsInactive,   color: C.yellow },
                 ] as const).map(st => (
@@ -462,7 +494,7 @@ export default function VouchersScreen() {
           renderItem={({ item }) => (
             <CatalogCard
               item={item}
-              alreadyRedeemed={redeemedIds.has(item.id)}
+              alreadyRedeemed={redeemedVoucherIds.has(item.id)}
               notEnoughPoints={item.pointVoucher > myPoints}
               redeeming={redeemingId === item.id}
               onRedeem={() => handleRedeem(item)}

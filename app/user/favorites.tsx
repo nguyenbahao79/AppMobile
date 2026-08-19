@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList, Pressable, SafeAreaView,
   ActivityIndicator, Alert, RefreshControl, Platform, TouchableOpacity,
@@ -52,30 +52,47 @@ function EmptyState() {
   );
 }
 
+const PAGE_SIZE = 10;
+
 /* ── Main Screen ─────────────────────────────────────────────────── */
 export default function FavoritesScreen() {
-  const [favorites,  setFavorites]  = useState<FavoriteMovie[]>([]);
-  const [loading,    setLoading]    = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [favorites,   setFavorites]   = useState<FavoriteMovie[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [refreshing,  setRefreshing]  = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore,     setHasMore]     = useState(true);
+  const [totalItems,  setTotalItems]  = useState(0);
+  const nextPageRef = useRef(0);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (reset: boolean) => {
     try {
-      const data = await meService.getFavorites();
-      setFavorites(data);
+      const targetPage = reset ? 0 : nextPageRef.current;
+      const data = await meService.getFavoritesPage(targetPage, PAGE_SIZE);
+      setFavorites(prev => (reset ? data.content : [...prev, ...data.content]));
+      nextPageRef.current = targetPage + 1;
+      setHasMore(targetPage + 1 < data.totalPages);
+      setTotalItems(data.totalElements);
     } catch {
       // giữ danh sách cũ nếu lỗi mạng
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   }, []);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(useCallback(() => { load(true); }, [load]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load();
+    await load(true);
     setRefreshing(false);
   }, [load]);
+
+  const handleEndReached = () => {
+    if (loadingMore || !hasMore || loading) return;
+    setLoadingMore(true);
+    load(false);
+  };
 
   const handleRemove = (movie: FavoriteMovie) => {
     Alert.alert(
@@ -89,6 +106,7 @@ export default function FavoritesScreen() {
             try {
               await meService.removeFavorite(movie.movieId);
               setFavorites(prev => prev.filter(f => f.movieId !== movie.movieId));
+              setTotalItems(prev => Math.max(0, prev - 1));
             } catch (err: any) {
               Alert.alert('Lỗi', err.message || 'Không thực hiện được thao tác.');
             }
@@ -133,9 +151,9 @@ export default function FavoritesScreen() {
         <Text style={s.headerTitle}>
           PHIM <Text style={{ color: C.pink }}>YÊU THÍCH</Text>
         </Text>
-        {favorites.length > 0 ? (
+        {totalItems > 0 ? (
           <View style={s.countBadge}>
-            <Text style={s.countText}>{favorites.length}</Text>
+            <Text style={s.countText}>{totalItems}</Text>
           </View>
         ) : <View style={{ width: 40 }} />}
       </View>
@@ -154,6 +172,8 @@ export default function FavoritesScreen() {
           contentContainerStyle={s.grid}
           columnWrapperStyle={s.row}
           showsVerticalScrollIndicator={false}
+          onEndReached={handleEndReached}
+          onEndReachedThreshold={0.4}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -166,9 +186,14 @@ export default function FavoritesScreen() {
           ListHeaderComponent={
             <View style={s.sectionHeader}>
               <Text style={s.sectionTitle}>DANH SÁCH <Text style={{ color: C.yellow }}>YÊU THÍCH</Text></Text>
-              <Text style={s.sectionSub}>{favorites.length} phim đã lưu</Text>
+              <Text style={s.sectionSub}>{totalItems} phim đã lưu</Text>
             </View>
           }
+          ListFooterComponent={loadingMore ? (
+            <View style={{ paddingVertical: 20 }}>
+              <ActivityIndicator size="small" color={C.purple} />
+            </View>
+          ) : null}
           renderItem={renderItem}
         />
       )}

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList, Image, Pressable,
   Modal, SafeAreaView, Platform, ScrollView,
@@ -461,27 +461,45 @@ export default function TicketsScreen() {
 
   // Khớp web TransactionHistory.jsx: cùng 1 danh sách giao dịch có 3 loại (vé/bắp nước/điểm).
   const [activeTab, setActiveTab] = useState<'ticket_online' | 'food' | 'points'>('ticket_online');
-  const [foodOrders, setFoodOrders] = useState<Transaction[]>([]);
-  const [pointsLogs, setPointsLogs] = useState<Transaction[]>([]);
   const [loadingOthers, setLoadingOthers] = useState(false);
+  // /me/transactions trả 1 luồng phân trang GỘP cả "food" và "points" theo thời gian — 2 tab bên dưới
+  // lọc theo type TỪ luồng đã tải, nên cuộn tải thêm ở 1 trong 2 tab sẽ tải thêm cho cả luồng chung
+  // (giống hạn chế đã chấp nhận ở web: lọc theo loại chỉ áp dụng trên dữ liệu đã tải, không xuyên trang).
+  const [allTx, setAllTx] = useState<Transaction[]>([]);
+  const [txHasMore, setTxHasMore] = useState(true);
+  const [txLoadingMore, setTxLoadingMore] = useState(false);
+  const nextTxPageRef = useRef(0);
+  const TX_PAGE_SIZE = 10;
 
-  const fetchOtherTransactions = useCallback(async () => {
-    setLoadingOthers(true);
+  const foodOrders = useMemo(() => allTx.filter((t) => t.type === 'food'), [allTx]);
+  const pointsLogs = useMemo(() => allTx.filter((t) => t.type === 'points'), [allTx]);
+
+  const fetchOtherTransactions = useCallback(async (reset: boolean) => {
+    if (reset) setLoadingOthers(true);
     try {
-      const data = await apiClient.get(API_ENDPOINTS.MY_TRANSACTIONS);
-      const list = Array.isArray(data) ? (data as Transaction[]) : [];
-      setFoodOrders(list.filter((t) => t.type === 'food'));
-      setPointsLogs(list.filter((t) => t.type === 'points'));
+      const targetPage = reset ? 0 : nextTxPageRef.current;
+      const data = await apiClient.get(`${API_ENDPOINTS.MY_TRANSACTIONS}?page=${targetPage}&size=${TX_PAGE_SIZE}`) as
+        { content?: Transaction[]; totalPages?: number } | null;
+      const content = Array.isArray(data?.content) ? (data!.content as Transaction[]) : [];
+      setAllTx(prev => (reset ? content : [...prev, ...content]));
+      nextTxPageRef.current = targetPage + 1;
+      setTxHasMore(targetPage + 1 < (data?.totalPages || 0));
     } catch {
-      setFoodOrders([]);
-      setPointsLogs([]);
+      if (reset) setAllTx([]);
     } finally {
       setLoadingOthers(false);
+      setTxLoadingMore(false);
     }
   }, []);
 
+  const handleOtherTxEndReached = () => {
+    if (txLoadingMore || !txHasMore || loadingOthers) return;
+    setTxLoadingMore(true);
+    fetchOtherTransactions(false);
+  };
+
   useFocusEffect(
-    useCallback(() => { fetchTickets(); fetchOtherTransactions(); }, [fetchTickets, fetchOtherTransactions])
+    useCallback(() => { fetchTickets(); fetchOtherTransactions(true); }, [fetchTickets, fetchOtherTransactions])
   );
 
   useEffect(() => {
@@ -492,7 +510,7 @@ export default function TicketsScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchTickets(), fetchOtherTransactions()]);
+    await Promise.all([fetchTickets(), fetchOtherTransactions(true)]);
     setRefreshing(false);
   };
 
@@ -615,6 +633,11 @@ export default function TicketsScreen() {
           renderItem={({ item }) => <FoodOrderCard tx={item} />}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          onEndReached={handleOtherTxEndReached}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={txLoadingMore ? (
+            <View style={{ paddingVertical: 20 }}><ActivityIndicator size="small" color={YELLOW} /></View>
+          ) : null}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={YELLOW} colors={[YELLOW]} />
           }
@@ -629,6 +652,11 @@ export default function TicketsScreen() {
           renderItem={({ item }) => <PointsLogCard tx={item} />}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          onEndReached={handleOtherTxEndReached}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={txLoadingMore ? (
+            <View style={{ paddingVertical: 20 }}><ActivityIndicator size="small" color={YELLOW} /></View>
+          ) : null}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={YELLOW} colors={[YELLOW]} />
           }
