@@ -23,6 +23,7 @@ import { movieService } from '@/services/movieService';
 import { meService, MyVoucher } from '@/services/meService';
 import { API_ENDPOINTS } from '@/api/config';
 import PayosQrModal from '@/components/PayosQrModal';
+import ZoomableSeatMap from '@/components/ZoomableSeatMap';
 
 // ─── Theme ───────────────────────────────────────────────────────────────────
 const NAVY   = '#0d0d2b';
@@ -306,7 +307,12 @@ export default function RealBookingScreen() {
         const byX      = new Map(rowSeats.map((s) => [Number(s.x), s]));
         const first    = sortSeats(rowSeats)[0];
         const cells: (Seat | null)[] = [];
-        for (let x = minX; x <= maxX; x++) cells.push(byX.get(x) || null);
+        for (let x = minX; x <= maxX; x++) {
+          const seat = byX.get(x) || null;
+          cells.push(seat);
+          // Ghế đôi chiếm luôn ô lưới kế bên (nếu trống) để không chừa khoảng hở giả.
+          if (seat && isCoupleSeat(seat) && !byX.get(x + 1)) x += 1;
+        }
         return { y, label: first?.row || String(y), cells };
       }),
     };
@@ -657,22 +663,25 @@ export default function RealBookingScreen() {
                     <Text style={s.emptyText}>Phòng chiếu này chưa có sơ đồ ghế.</Text>
                   </View>
                 ) : (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <View style={s.seatMap}>
-                      {seatLayout.rows.map((row) => (
-                        <View key={row.y} style={s.seatRow}>
-                          <Text style={s.rowLabel}>{row.label}</Text>
-                          <View style={s.seatCells}>
-                            {row.cells.map((seat, idx) =>
-                              seat
-                                ? renderSeat(seat)
-                                : <View key={`${row.y}-${idx}`} style={s.seatGap} />
-                            )}
+                  <>
+                    <ZoomableSeatMap height={340}>
+                      <View style={s.seatMap}>
+                        {seatLayout.rows.map((row) => (
+                          <View key={row.y} style={s.seatRow}>
+                            <Text style={s.rowLabel}>{row.label}</Text>
+                            <View style={s.seatCells}>
+                              {row.cells.map((seat, idx) =>
+                                seat
+                                  ? renderSeat(seat)
+                                  : <View key={`${row.y}-${idx}`} style={s.seatGap} />
+                              )}
+                            </View>
                           </View>
-                        </View>
-                      ))}
-                    </View>
-                  </ScrollView>
+                        ))}
+                      </View>
+                    </ZoomableSeatMap>
+                    <Text style={s.zoomHint}>Chụm 2 ngón để phóng to, kéo để xem chi tiết ghế</Text>
+                  </>
                 )}
 
                 {/* Legend */}
@@ -994,6 +1003,7 @@ const s = StyleSheet.create({
   seatGap:   { width: 30, height: 30, marginHorizontal: 2 },
   seatText:  { fontSize: 9, fontWeight: '700' },
   coupleTag: { position: 'absolute', right: 3, bottom: 1, fontSize: 7, fontWeight: '900' },
+  zoomHint:  { textAlign: 'center', fontSize: 10, color: MUTED, marginTop: 6 },
 
   // Legend
   legend:      { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 12, marginTop: 16 },
