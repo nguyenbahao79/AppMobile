@@ -13,13 +13,12 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Href, Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import * as ExpoLinking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAuth } from '@/context/AuthContext';
 import { Movie } from '@/mocks/movies';
-import { bookingService, PayosStatus, Product, Seat, Showtime, TicketQuote } from '@/services/bookingService';
+import { bookingService, PayosStatus, Product, Seat, Showtime, TicketQuote, webReturnUrl } from '@/services/bookingService';
 import { movieService } from '@/services/movieService';
 import { meService, MyVoucher } from '@/services/meService';
 import ZoomableSeatMap from '@/components/ZoomableSeatMap';
@@ -360,7 +359,11 @@ export default function RealBookingScreen() {
     if (!selectedShowtime) return;
     setStepLoading(true);
     try {
-      const returnUrl = ExpoLinking.createURL('payment-return');
+      // Dùng đúng URL thật của web (https://...) làm returnUrl/cancelUrl — giống hệt luồng
+      // thanh toán trên web, đã chứng minh hoạt động ổn định. Deep link scheme riêng của app
+      // (moviezone://...) không đáng tin cậy để PayOS tự redirect quay lại sau khi thanh toán.
+      const returnUrl = webReturnUrl('/payment/success');
+      const cancelUrl = webReturnUrl('/payment/cancel');
       const response  = await bookingService.checkout({
         showtimeId: selectedShowtime.id,
         seatIds: selectedSeatIds,
@@ -368,7 +371,7 @@ export default function RealBookingScreen() {
         snacks: snackLines,
         userVoucherId: selectedVoucher?.userVoucherId,
         returnUrl,
-        cancelUrl: returnUrl,
+        cancelUrl,
       });
       const checkoutUrl    = response.payos?.checkoutUrl;
       const payosOrderCode = response.payosOrderCode;

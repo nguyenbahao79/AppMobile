@@ -5,12 +5,11 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Href, router } from 'expo-router';
-import * as ExpoLinking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 
 import { IconSymbol } from '@/components/base/icon-symbol';
 import { useAuth } from '@/context/AuthContext';
-import { bookingService, PayosStatus, Product } from '@/services/bookingService';
+import { bookingService, PayosStatus, Product, webReturnUrl } from '@/services/bookingService';
 import { cinemaService, Cinema } from '@/services/cinemaService';
 import { foodOrderService } from '@/services/foodOrderService';
 
@@ -115,12 +114,16 @@ export default function FoodOrderScreen() {
     if (!selectedCinemaId || cartLines.length === 0) return;
     setStepLoading(true);
     try {
-      const returnUrl = ExpoLinking.createURL('payment-return');
+      // Dùng đúng URL thật của web (https://...) làm returnUrl/cancelUrl — giống hệt luồng
+      // thanh toán trên web, đã chứng minh hoạt động ổn định. Deep link scheme riêng của app
+      // (moviezone://...) không đáng tin cậy để PayOS tự redirect quay lại sau khi thanh toán.
+      const returnUrl = webReturnUrl('/payment/success');
+      const cancelUrl = webReturnUrl('/payment/cancel');
       const response = await foodOrderService.checkout({
         cinemaId: selectedCinemaId,
         items: cartLines,
         returnUrl,
-        cancelUrl: returnUrl,
+        cancelUrl,
       });
       const checkoutUrl = response.payos?.checkoutUrl;
       const payosOrderCode = response.payosOrderCode;
