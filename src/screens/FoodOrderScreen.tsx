@@ -6,14 +6,13 @@ import {
 import { Image } from 'expo-image';
 import { Href, router } from 'expo-router';
 import * as ExpoLinking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 
 import { IconSymbol } from '@/components/base/icon-symbol';
 import { useAuth } from '@/context/AuthContext';
-import { bookingService, Product } from '@/services/bookingService';
+import { bookingService, PayosStatus, Product } from '@/services/bookingService';
 import { cinemaService, Cinema } from '@/services/cinemaService';
 import { foodOrderService } from '@/services/foodOrderService';
-import { API_ENDPOINTS } from '@/api/config';
-import PayosQrModal from '@/components/PayosQrModal';
 
 /* ── Theme ───────────────────────────────────────────────────────── */
 const C = {
@@ -45,7 +44,6 @@ export default function FoodOrderScreen() {
   const [cart, setCart] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
   const [stepLoading, setStepLoading] = useState(false);
-  const [payosQr, setPayosQr] = useState<{ code: string; orderCode: number; amountVnd: number } | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -124,10 +122,10 @@ export default function FoodOrderScreen() {
         returnUrl,
         cancelUrl: returnUrl,
       });
-      const qrCode = response.payos?.qrCode;
+      const checkoutUrl = response.payos?.checkoutUrl;
       const payosOrderCode = response.payosOrderCode;
-      if (qrCode && payosOrderCode) {
-        setPayosQr({ code: qrCode, orderCode: payosOrderCode, amountVnd: response.amountVnd || 0 });
+      if (checkoutUrl && payosOrderCode) {
+        await handlePayosCheckout(checkoutUrl, payosOrderCode, returnUrl);
       } else {
         Alert.alert('Đã tạo đơn', `Mã đơn: ${response.payosOrderCode || response.orderOnlineId}`);
       }
@@ -138,20 +136,28 @@ export default function FoodOrderScreen() {
     }
   };
 
-  const handlePayosPaid = () => {
-    setPayosQr(null);
-    Alert.alert('Thanh toán thành công', 'Đơn bắp nước của bạn đã được xác nhận.', [
-      { text: 'OK', onPress: () => router.back() },
-    ]);
-  };
+  /** Mở trang thanh toán PayOS thật trong app (giống web) thay vì tự vẽ QR + poll — PayOS xác
+   * nhận thanh toán qua webhook phía server, không phụ thuộc app còn mở/nền hay không. */
+  const handlePayosCheckout = async (checkoutUrl: string, orderCode: number, returnUrl: string) => {
+    await WebBrowser.openAuthSessionAsync(checkoutUrl, returnUrl);
 
-  const handlePayosCancel = (reason: 'user' | 'expired' | 'cancelled_on_payos') => {
-    const orderCode = payosQr?.orderCode;
-    setPayosQr(null);
-    if (orderCode) foodOrderService.cancelPendingOrder(orderCode).catch(() => {});
-    if (reason === 'expired') {
-      Alert.alert('Hết hạn thanh toán', 'Mã QR đã hết hạn và đơn bắp nước đã được hủy.');
-    } else if (reason === 'cancelled_on_payos') {
+    let status: PayosStatus = 'PENDING';
+    try {
+      status = await foodOrderService.checkPayosStatus(orderCode);
+      if (status === 'PENDING') {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        status = await foodOrderService.checkPayosStatus(orderCode);
+      }
+    } catch {
+      // Giữ nguyên PENDING — xử lý như chưa xác nhận được ở nhánh dưới.
+    }
+
+    if (status === 'PAID') {
+      Alert.alert('Thanh toán thành công', 'Đơn bắp nước của bạn đã được xác nhận.', [
+        { text: 'OK', onPress: () => router.back() },
+      ]);
+    } else {
+      foodOrderService.cancelPendingOrder(orderCode).catch(() => {});
       Alert.alert('Đã hủy thanh toán', 'Đơn bắp nước đã được hủy.');
     }
   };
@@ -335,16 +341,6 @@ export default function FoodOrderScreen() {
           }
         </TouchableOpacity>
       </View>
-
-      <PayosQrModal
-        visible={Boolean(payosQr)}
-        qrCode={payosQr?.code ?? null}
-        amountVnd={payosQr?.amountVnd}
-        paymentQrUrl={API_ENDPOINTS.PAYMENT_QR_FOOD_ORDERS}
-        onCheckStatus={() => foodOrderService.checkPayosStatus(payosQr!.orderCode)}
-        onPaid={handlePayosPaid}
-        onCancel={handlePayosCancel}
-      />
     </SafeAreaView>
   );
 }

@@ -14,15 +14,14 @@ import {
 import { Image } from 'expo-image';
 import { Href, Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import * as ExpoLinking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAuth } from '@/context/AuthContext';
 import { Movie } from '@/mocks/movies';
-import { bookingService, Product, Seat, Showtime, TicketQuote } from '@/services/bookingService';
+import { bookingService, PayosStatus, Product, Seat, Showtime, TicketQuote } from '@/services/bookingService';
 import { movieService } from '@/services/movieService';
 import { meService, MyVoucher } from '@/services/meService';
-import { API_ENDPOINTS } from '@/api/config';
-import PayosQrModal from '@/components/PayosQrModal';
 import ZoomableSeatMap from '@/components/ZoomableSeatMap';
 
 // ─── Theme ───────────────────────────────────────────────────────────────────
@@ -167,7 +166,6 @@ export default function RealBookingScreen() {
   const [showVoucherPicker, setShowVoucherPicker] = useState(false);
   const [peerHeldSeatIds,  setPeerHeldSeatIds]  = useState<number[]>([]);
   const [abuseWarning,     setAbuseWarning]     = useState(false);
-  const [payosQr,          setPayosQr]          = useState<{ code: string; orderCode: number; amountVnd: number } | null>(null);
 
   const selectedShowtime = useMemo(
     () => showtimes.find((s) => s.id === selectedShowtimeId) ?? null,
@@ -372,10 +370,10 @@ export default function RealBookingScreen() {
         returnUrl,
         cancelUrl: returnUrl,
       });
-      const qrCode         = response.payos?.qrCode;
+      const checkoutUrl    = response.payos?.checkoutUrl;
       const payosOrderCode = response.payosOrderCode;
-      if (qrCode && payosOrderCode) {
-        setPayosQr({ code: qrCode, orderCode: payosOrderCode, amountVnd: response.amountVnd || 0 });
+      if (checkoutUrl && payosOrderCode) {
+        await handlePayosCheckout(checkoutUrl, payosOrderCode, returnUrl);
       } else {
         Alert.alert('Đã tạo đơn', `Mã đơn: ${response.payosOrderCode || response.orderOnlineId}`);
       }
@@ -386,21 +384,31 @@ export default function RealBookingScreen() {
     }
   };
 
-  const handlePayosPaid = () => {
-    setPayosQr(null);
-    Alert.alert('Thanh toán thành công 🎉', 'Vé của bạn đã được xác nhận!', [
-      { text: 'Xem vé', onPress: () => router.replace('/user/(tabs)/tickets' as Href) },
-    ]);
-  };
+  /** Mở trang thanh toán PayOS thật trong app (giống web) thay vì tự vẽ QR + poll — PayOS xác
+   * nhận thanh toán qua webhook phía server, không phụ thuộc app còn mở/nền hay không. Sau khi
+   * người dùng đóng trang thanh toán, kiểm tra lại trạng thái 1 lần (thử thêm lần 2 nếu còn đang
+   * chờ, đề phòng webhook chưa kịp xử lý) để quyết định giữ hay hủy đơn. */
+  const handlePayosCheckout = async (checkoutUrl: string, orderCode: number, returnUrl: string) => {
+    await WebBrowser.openAuthSessionAsync(checkoutUrl, returnUrl);
 
-  const handlePayosCancel = (reason: 'user' | 'expired' | 'cancelled_on_payos') => {
-    const orderCode = payosQr?.orderCode;
-    setPayosQr(null);
-    if (orderCode) bookingService.cancelPendingOrder(orderCode).catch(() => {});
-    if (reason === 'expired') {
-      Alert.alert('Hết hạn thanh toán', 'Mã QR đã hết hạn và đơn đặt vé đã được hủy.');
-    } else if (reason === 'cancelled_on_payos') {
-      Alert.alert('Đã hủy thanh toán', 'Đơn đặt vé đã được hủy.');
+    let status: PayosStatus = 'PENDING';
+    try {
+      status = await bookingService.checkPayosStatus(orderCode);
+      if (status === 'PENDING') {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        status = await bookingService.checkPayosStatus(orderCode);
+      }
+    } catch {
+      // Giữ nguyên PENDING — xử lý như chưa xác nhận được ở nhánh dưới.
+    }
+
+    if (status === 'PAID') {
+      Alert.alert('Thanh toán thành công 🎉', 'Vé của bạn đã được xác nhận!', [
+        { text: 'Xem vé', onPress: () => router.replace('/user/(tabs)/tickets' as Href) },
+      ]);
+    } else {
+      bookingService.cancelPendingOrder(orderCode).catch(() => {});
+      Alert.alert('Đã hủy thanh toán', 'Đơn đặt vé đã được hủy. Bạn có thể chọn suất khác hoặc thanh toán lại.');
     }
   };
 
@@ -923,16 +931,6 @@ export default function RealBookingScreen() {
           }
         </Pressable>
       </View>
-
-      <PayosQrModal
-        visible={Boolean(payosQr)}
-        qrCode={payosQr?.code ?? null}
-        amountVnd={payosQr?.amountVnd}
-        paymentQrUrl={API_ENDPOINTS.PAYMENT_QR_TICKETS}
-        onCheckStatus={() => bookingService.checkPayosStatus(payosQr!.orderCode)}
-        onPaid={handlePayosPaid}
-        onCancel={handlePayosCancel}
-      />
     </SafeAreaView>
   );
 }
