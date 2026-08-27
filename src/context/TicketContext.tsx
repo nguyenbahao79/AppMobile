@@ -96,9 +96,14 @@ export function TicketProvider({ children }: { children: ReactNode }) {
         setTickets([]);
         return;
       }
-      const data = await apiClient.get(API_ENDPOINTS.MY_TRANSACTIONS);
-      if (data && Array.isArray(data)) {
-        const mappedTickets = (data as Transaction[])
+      // /me/transactions giờ trả dạng phân trang { content, page, size, totalElements, totalPages }
+      // (không còn là mảng thô nữa) — lấy size lớn vì tab "Vé xem phim" chưa có cuộn tải thêm riêng,
+      // để không bị mất vé cũ so với hành vi "tải hết" trước khi có phân trang.
+      const data = await apiClient.get(`${API_ENDPOINTS.MY_TRANSACTIONS}?page=0&size=50`) as
+        { content?: Transaction[] } | Transaction[] | null;
+      const content = Array.isArray(data) ? data : Array.isArray(data?.content) ? data!.content : null;
+      if (content) {
+        const mappedTickets = content
           .filter((transaction) => transaction.type === 'ticket_online')
           .map((transaction) => {
             const createdAt = transaction.createdAt ? new Date(transaction.createdAt) : new Date();
