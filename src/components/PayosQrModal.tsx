@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 
 import { BASE_URL } from '@/api/config';
@@ -59,7 +59,7 @@ export default function PayosQrModal({ visible, qrCode, amountVnd, paymentQrUrl,
     setSecondsLeft(LINK_LIFETIME_SEC);
     getAuthHeader().then(setAuthHeader).catch(() => setAuthHeader({}));
 
-    pollRef.current = setInterval(async () => {
+    const runCheck = async () => {
       if (settledRef.current) return;
       try {
         const status = await onCheckStatus();
@@ -75,7 +75,16 @@ export default function PayosQrModal({ visible, qrCode, amountVnd, paymentQrUrl,
       } catch {
         // Lỗi mạng tạm thời khi poll — bỏ qua, thử lại ở lần poll kế tiếp.
       }
-    }, POLL_INTERVAL_MS);
+    };
+
+    pollRef.current = setInterval(runCheck, POLL_INTERVAL_MS);
+
+    // Người dùng thường rời app để mở app ngân hàng quét/xác nhận thanh toán — lúc đó app bị đưa
+    // xuống nền và interval polling có thể bị hệ điều hành tạm dừng. Kiểm tra ngay khi quay lại
+    // foreground để không bị "kẹt" chờ dù đã thanh toán xong.
+    const appStateSub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') runCheck();
+    });
 
     tickRef.current = setInterval(() => {
       setSecondsLeft((prev) => {
@@ -91,7 +100,10 @@ export default function PayosQrModal({ visible, qrCode, amountVnd, paymentQrUrl,
       });
     }, 1000);
 
-    return clearTimers;
+    return () => {
+      appStateSub.remove();
+      clearTimers();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, qrCode]);
 
