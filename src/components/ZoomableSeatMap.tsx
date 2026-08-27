@@ -4,6 +4,7 @@ import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-g
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 
 const MAX_ZOOM_MULTIPLIER = 4;
+const MIN_ZOOM_MULTIPLIER = 0.5;
 
 function clamp(value: number, min: number, max: number) {
   'worklet';
@@ -62,7 +63,11 @@ export default function ZoomableSeatMap({
 
   const pinch = Gesture.Pinch()
     .onUpdate((e) => {
-      scale.value = clamp(savedScale.value * e.scale, fitScale.value, fitScale.value * MAX_ZOOM_MULTIPLIER);
+      scale.value = clamp(
+        savedScale.value * e.scale,
+        fitScale.value * MIN_ZOOM_MULTIPLIER,
+        fitScale.value * MAX_ZOOM_MULTIPLIER
+      );
     })
     .onEnd(() => {
       savedScale.value = scale.value;
