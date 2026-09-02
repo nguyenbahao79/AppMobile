@@ -30,6 +30,14 @@ export async function clearSession() {
   await clearTokens();
 }
 
+/** Gọi khi BE từ chối cả access lẫn refresh token (hết hạn/thu hồi — ví dụ đăng nhập nơi khác làm
+ * đổi session_version). AuthContext đăng ký callback này lúc mount để tự đăng xuất + điều hướng về
+ * login ngay, thay vì chỉ âm thầm xóa token trong storage mà giao diện vẫn tưởng còn đăng nhập. */
+let onForceLogout: (() => void) | null = null;
+export function setOnForceLogout(cb: (() => void) | null) {
+  onForceLogout = cb;
+}
+
 function notifyRefreshSubscribers(token: string | null) {
   const subscribers = refreshSubscribers;
   refreshSubscribers = [];
@@ -65,6 +73,7 @@ async function refreshAccessToken(): Promise<string | null> {
       refreshToken = null;
       await clearTokens();
       notifyRefreshSubscribers(null);
+      onForceLogout?.();
       return null;
     }
 

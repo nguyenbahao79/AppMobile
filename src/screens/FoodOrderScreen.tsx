@@ -5,14 +5,14 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Href, router } from 'expo-router';
-import * as ExpoLinking from 'expo-linking';
-import * as WebBrowser from 'expo-web-browser';
 
 import { IconSymbol } from '@/components/base/icon-symbol';
 import { useAuth } from '@/context/AuthContext';
-import { bookingService, PayosStatus, Product, webReturnUrl } from '@/services/bookingService';
+import { bookingService, Product } from '@/services/bookingService';
 import { cinemaService, Cinema } from '@/services/cinemaService';
 import { foodOrderService } from '@/services/foodOrderService';
+import { API_ENDPOINTS } from '@/api/config';
+import PayosQrModal from '@/components/PayosQrModal';
 
 /* ── Theme ───────────────────────────────────────────────────────── */
 const C = {
@@ -44,6 +44,7 @@ export default function FoodOrderScreen() {
   const [cart, setCart] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
   const [stepLoading, setStepLoading] = useState(false);
+  const [payosQr, setPayosQr] = useState<{ code: string; orderCode: number; amountVnd: number } | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -115,22 +116,14 @@ export default function FoodOrderScreen() {
     if (!selectedCinemaId || cartLines.length === 0) return;
     setStepLoading(true);
     try {
-      // PayOS chỉ tự redirect đáng tin cậy tới URL web thật (https://...) — giống luồng web.
-      // Nhưng trang web đó tự nó không biết đóng lại browser-in-app, nên kèm theo deep link
-      // riêng của app (?scheme=...) để trang web tự điều hướng ngược vào app sau 5s.
-      const appDeepLink = ExpoLinking.createURL('payment-return');
-      const returnUrl = webReturnUrl(`/payment/success?from=app&scheme=${encodeURIComponent(appDeepLink)}`);
-      const cancelUrl = webReturnUrl(`/payment/cancel?from=app&scheme=${encodeURIComponent(appDeepLink)}`);
       const response = await foodOrderService.checkout({
         cinemaId: selectedCinemaId,
         items: cartLines,
-        returnUrl,
-        cancelUrl,
       });
-      const checkoutUrl = response.payos?.checkoutUrl;
+      const qrCode = response.payos?.qrCode;
       const payosOrderCode = response.payosOrderCode;
-      if (checkoutUrl && payosOrderCode) {
-        await handlePayosCheckout(checkoutUrl, payosOrderCode, appDeepLink);
+      if (qrCode && payosOrderCode) {
+        setPayosQr({ code: qrCode, orderCode: payosOrderCode, amountVnd: response.amountVnd || 0 });
       } else {
         Alert.alert('Đã tạo đơn', `Mã đơn: ${response.payosOrderCode || response.orderOnlineId}`);
       }
@@ -141,29 +134,20 @@ export default function FoodOrderScreen() {
     }
   };
 
-  /** Mở trang thanh toán PayOS thật trong app (giống web) thay vì tự vẽ QR + poll — PayOS xác
-   * nhận thanh toán qua webhook phía server, không phụ thuộc app còn mở/nền hay không. Trang web
-   * trả về sẽ tự điều hướng ngược vào app qua deep link sau 5s. */
-  const handlePayosCheckout = async (checkoutUrl: string, orderCode: number, appDeepLink: string) => {
-    await WebBrowser.openAuthSessionAsync(checkoutUrl, appDeepLink);
+  const handlePayosPaid = () => {
+    setPayosQr(null);
+    Alert.alert('Thanh toán thành công', 'Đơn bắp nước của bạn đã được xác nhận.', [
+      { text: 'OK', onPress: () => router.back() },
+    ]);
+  };
 
-    let status: PayosStatus = 'PENDING';
-    try {
-      status = await foodOrderService.checkPayosStatus(orderCode);
-      if (status === 'PENDING') {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        status = await foodOrderService.checkPayosStatus(orderCode);
-      }
-    } catch {
-      // Giữ nguyên PENDING — xử lý như chưa xác nhận được ở nhánh dưới.
-    }
-
-    if (status === 'PAID') {
-      Alert.alert('Thanh toán thành công', 'Đơn bắp nước của bạn đã được xác nhận.', [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
-    } else {
-      foodOrderService.cancelPendingOrder(orderCode).catch(() => {});
+  const handlePayosCancel = (reason: 'user' | 'expired' | 'cancelled_on_payos') => {
+    const orderCode = payosQr?.orderCode;
+    setPayosQr(null);
+    if (orderCode) foodOrderService.cancelPendingOrder(orderCode).catch(() => {});
+    if (reason === 'expired') {
+      Alert.alert('Hết hạn thanh toán', 'Mã QR đã hết hạn và đơn bắp nước đã được hủy.');
+    } else if (reason === 'cancelled_on_payos') {
       Alert.alert('Đã hủy thanh toán', 'Đơn bắp nước đã được hủy.');
     }
   };
@@ -347,6 +331,16 @@ export default function FoodOrderScreen() {
           }
         </TouchableOpacity>
       </View>
+
+      <PayosQrModal
+        visible={Boolean(payosQr)}
+        qrCode={payosQr?.code ?? null}
+        amountVnd={payosQr?.amountVnd}
+        paymentQrUrl={API_ENDPOINTS.PAYMENT_QR_FOOD_ORDERS}
+        onCheckStatus={() => foodOrderService.checkPayosStatus(payosQr!.orderCode)}
+        onPaid={handlePayosPaid}
+        onCancel={handlePayosCancel}
+      />
     </SafeAreaView>
   );
 }

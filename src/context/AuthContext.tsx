@@ -1,6 +1,7 @@
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
+import { Href, useRouter } from 'expo-router';
 
-import { apiClient, clearSession, restoreTokensFromStorage, setSessionTokens } from '@/api/client';
+import { apiClient, clearSession, restoreTokensFromStorage, setOnForceLogout, setSessionTokens } from '@/api/client';
 import { API_ENDPOINTS } from '@/api/config';
 import {
   clearStoredSession,
@@ -34,8 +35,22 @@ async function persistSession(response: AuthResponse) {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const router = useRouter();
   const [session, setSession] = useState<AuthResponse | null>(null);
   const [isRestoring, setIsRestoring] = useState(true);
+
+  // Đăng nhập tài khoản này ở nơi khác (web/app khác) làm đổi session_version phía BE — request
+  // tiếp theo của phiên này sẽ bị từ chối cả access lẫn refresh token. client.ts đã tự xóa token
+  // khỏi storage lúc đó; ở đây chỉ cần đồng bộ lại state React + điều hướng về màn login ngay,
+  // không đợi người dùng tự phát hiện qua thông báo lỗi.
+  useEffect(() => {
+    setOnForceLogout(() => {
+      setSession(null);
+      clearStoredSession().catch(() => {});
+      router.replace('/(auth)/login' as Href);
+    });
+    return () => setOnForceLogout(null);
+  }, [router]);
 
   useEffect(() => {
     (async () => {

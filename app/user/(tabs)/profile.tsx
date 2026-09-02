@@ -124,7 +124,7 @@ export default function ProfileScreen() {
         { icon: 'mappin.and.ellipse',      title: 'Hệ thống rạp',        accent: '#34C759', route: '/user/cinemas'   },
         { icon: 'newspaper.fill',          title: 'Tin tức & Sự kiện',   accent: C.purple,  route: '/user/news'      },
         { icon: 'questionmark.circle.fill',title: 'Trợ giúp & Hỗ trợ',  accent: '#8E8E93',
-          action: () => Alert.alert('Hỗ trợ khách hàng', 'Email: support@cinema.com\nHotline: 1900 1234') },
+          action: () => Alert.alert('Hỗ trợ khách hàng', 'Email: 01236614499cong@gmail.com\nHotline: 0939291356') },
       ],
     },
   ];
