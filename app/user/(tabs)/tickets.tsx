@@ -303,6 +303,23 @@ function TicketDetailModal({
                 )}
               </View>
 
+              {/* QR bắp nước — đơn này mua kèm bắp nước chung, 2 mã QR độc lập */}
+              {!!ticket.receiptToken && (
+                <View style={modal.foodQrWrap}>
+                  <View style={modal.foodQrRow}>
+                    <Image
+                      source={{ uri: `${BASE_URL}${API_ENDPOINTS.RECEIPT_QR(ticket.receiptToken)}` }}
+                      style={modal.foodQrImg}
+                      resizeMode="contain"
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={modal.foodQrTitle}>QR bắp nước đi kèm</Text>
+                      <Text style={modal.foodQrSub}>Xuất trình mã này tại quầy để nhận bắp nước.</Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+
               {/* Movie title */}
               <View style={modal.movieTitleWrap}>
                 <Text style={modal.movieTitle}>{ticket.movieTitle}</Text>
@@ -408,6 +425,13 @@ const modal = StyleSheet.create({
   statusPillText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
   ticketCode: { color: DIM, fontSize: 12, letterSpacing: 1.5, marginTop: 10, fontWeight: '600' },
   qrNote: { color: DIM, fontSize: 11, fontStyle: 'italic', marginTop: 4 },
+
+  /* Food QR (đơn vé mua kèm bắp nước) */
+  foodQrWrap: { marginHorizontal: 20, marginBottom: 16, backgroundColor: CARD, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: BORDER },
+  foodQrRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  foodQrImg: { width: 72, height: 72, borderRadius: 8, backgroundColor: '#fff' },
+  foodQrTitle: { fontSize: 13, fontWeight: '800', color: WHITE, marginBottom: 3 },
+  foodQrSub: { fontSize: 11, color: MUTED, lineHeight: 15 },
 
   /* Movie title */
   movieTitleWrap: {

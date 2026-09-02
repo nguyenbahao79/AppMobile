@@ -27,6 +27,8 @@ export interface Ticket {
   payosOrderCode?: number;
   /** Ngày chiếu gốc (ISO string từ BE) — dùng để so sánh thời gian thực tế. */
   showDateRaw?: string;
+  /** QR bắp nước — có khi đơn vé này mua kèm bắp nước chung (2 mã QR độc lập: vé + bắp nước). */
+  receiptToken?: string;
 }
 
 export type TransactionItem = {
@@ -129,6 +131,7 @@ export function TicketProvider({ children }: { children: ReactNode }) {
                 qrCode: '',
                 rawStatus: transaction.status,
                 payosOrderCode: Number(transaction.orderCode) || undefined,
+                receiptToken: transaction.receiptToken,
               } as Ticket];
             }
 
@@ -156,6 +159,7 @@ export function TicketProvider({ children }: { children: ReactNode }) {
               cinemaAddress: firstTicket.cinemaAddress,
               rawStatus: transaction.status,
               payosOrderCode: Number(transaction.orderCode) || undefined,
+              receiptToken: transaction.receiptToken,
             } as Ticket;
           })
           .flat();
