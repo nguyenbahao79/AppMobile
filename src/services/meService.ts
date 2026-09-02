@@ -87,6 +87,11 @@ export const meService = {
     await apiClient.delete(API_ENDPOINTS.FAVORITE_BY_MOVIE(movieId));
   },
 
+  /** Xóa tài khoản: BE xóa thông tin đăng ký + thu hồi token ngay (đổi session_version). */
+  async deleteAccount() {
+    await apiClient.delete(API_ENDPOINTS.DELETE_ACCOUNT);
+  },
+
   async getMovieReviewStatus(movieId: number) {
     return apiClient.get(API_ENDPOINTS.MOVIE_REVIEW_BY_MOVIE(movieId)) as Promise<MovieReviewStatus>;
   },

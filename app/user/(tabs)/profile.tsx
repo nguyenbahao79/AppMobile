@@ -142,6 +142,33 @@ export default function ProfileScreen() {
     ]);
   };
 
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Xóa tài khoản',
+      'Thông tin đăng ký (tên, email, số điện thoại, ảnh đại diện, ngày sinh, mật khẩu) sẽ bị xóa và bạn sẽ bị đăng xuất ngay lập tức. Lịch sử vé/đơn hàng vẫn được lưu lại. Hành động này không thể hoàn tác. Bạn có chắc chắn muốn tiếp tục?',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Xóa tài khoản', style: 'destructive',
+          onPress: async () => {
+            setDeletingAccount(true);
+            try {
+              await meService.deleteAccount();
+              logout();
+              router.replace('/(auth)/login' as Href);
+            } catch (error: any) {
+              Alert.alert('Không xóa được tài khoản', error?.message || 'Vui lòng thử lại sau.');
+            } finally {
+              setDeletingAccount(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -326,6 +353,18 @@ export default function ProfileScreen() {
           <Text style={styles.logoutText}>Đăng xuất</Text>
         </Pressable>
 
+        {/* ── Delete account ── */}
+        <Pressable
+          style={({ pressed }) => [styles.deleteAccountBtn, (pressed || deletingAccount) && { opacity: 0.6 }]}
+          onPress={handleDeleteAccount}
+          disabled={deletingAccount}
+        >
+          <IconSymbol name="trash.fill" size={16} color="rgba(255,59,48,0.6)" />
+          <Text style={styles.deleteAccountText}>
+            {deletingAccount ? 'Đang xóa tài khoản...' : 'Xóa tài khoản'}
+          </Text>
+        </Pressable>
+
         <View style={styles.bottomSpacer} />
       </ScrollView>
     </SafeAreaView>
@@ -474,6 +513,13 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#FF3B3030',
   },
   logoutText: { color: '#FF3B30', fontSize: 16, fontWeight: '700', marginLeft: 8 },
+
+  // ── Delete account ──
+  deleteAccountBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    marginHorizontal: 16, marginTop: 10, paddingVertical: 10,
+  },
+  deleteAccountText: { color: 'rgba(255,59,48,0.6)', fontSize: 13, fontWeight: '600', marginLeft: 6 },
 
   bottomSpacer: { height: 16 },
 

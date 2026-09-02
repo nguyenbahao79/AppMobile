@@ -92,30 +92,53 @@ export default function QRScannerScreen() {
   const handleBarcodeScanned = async ({ data }: { data: string }) => {
     if (scanned) return;
     setScanned(true);
+    const content = data.trim();
+    // Mã bắp nước (receiptToken) luôn có tiền tố "RCP-", khác hẳn QR vé (chuỗi mã hóa dài) —
+    // tự nhận diện để gọi đúng API xác thực, không cần 2 nút quét riêng.
+    const isFoodOrder = content.startsWith('RCP-');
     try {
-      const response = await apiClient.post(API_ENDPOINTS.VERIFY_TICKET, { qrToken: data.trim() });
-      const r = (response ?? {}) as Record<string, any>;
-      setPhase({
-        name: 'success',
-        data: {
-          orderCode: String(r.orderCode || r.ticketCode || '—'),
-          customerName: r.customerName,
-          status: r.status,
-          finalAmount: r.finalAmount,
-          checkedInAt: r.checkedInAt,
-          tickets: [{
-            movieTitle: r.movieTitle,
-            showtime: r.showtime,
-            roomName: r.roomName,
-            seatNumber: r.seatNumber,
-            seatTypeName: r.seatTypeName,
-          }],
-          foods: Array.isArray(r.foods) ? r.foods : [],
-        },
-      });
+      if (isFoodOrder) {
+        const response = await apiClient.post(API_ENDPOINTS.VERIFY_FOOD_ORDER, { receiptToken: content });
+        const r = (response ?? {}) as Record<string, any>;
+        setPhase({
+          name: 'success',
+          data: {
+            orderCode: String(r.orderCode || '—'),
+            customerName: r.customerName,
+            status: 1,
+            finalAmount: r.totalAmount,
+            checkedInAt: r.deliveredAt,
+            tickets: [],
+            foods: Array.isArray(r.items)
+              ? r.items.map((it: any) => ({ productName: it.productName, quantity: it.quantity }))
+              : [],
+          },
+        });
+      } else {
+        const response = await apiClient.post(API_ENDPOINTS.VERIFY_TICKET, { qrToken: content });
+        const r = (response ?? {}) as Record<string, any>;
+        setPhase({
+          name: 'success',
+          data: {
+            orderCode: String(r.orderCode || r.ticketCode || '—'),
+            customerName: r.customerName,
+            status: r.status,
+            finalAmount: r.finalAmount,
+            checkedInAt: r.checkedInAt,
+            tickets: [{
+              movieTitle: r.movieTitle,
+              showtime: r.showtime,
+              roomName: r.roomName,
+              seatNumber: r.seatNumber,
+              seatTypeName: r.seatTypeName,
+            }],
+            foods: Array.isArray(r.foods) ? r.foods : [],
+          },
+        });
+      }
     } catch (error: any) {
-      const msg = error.message || 'Không tìm thấy thông tin vé này.';
-      if (msg.includes('đã được sử dụng')) {
+      const msg = error.message || (isFoodOrder ? 'Không tìm thấy đơn bắp nước này.' : 'Không tìm thấy thông tin vé này.');
+      if (msg.includes('đã được sử dụng') || msg.includes('đã được giao')) {
         setPhase({ name: 'already_used', message: msg });
       } else {
         setPhase({ name: 'error', message: msg });

@@ -113,6 +113,7 @@ export const API_ENDPOINTS = {
   PAYOS_STATUS_FOOD_ORDERS: (payosOrderCode: number) => `/food-orders/payos/${payosOrderCode}/status`,
   MY_TRANSACTIONS: '/me/transactions',
   MY_FAVORITES: '/me/favorites',
+  DELETE_ACCOUNT: '/me/account',
   FAVORITE_BY_MOVIE: (movieId: string | number) => `/me/favorites/${movieId}`,
   MOVIE_REVIEW_BY_MOVIE: (movieId: string | number) => `/me/movie-reviews/${movieId}`,
   MY_VOUCHERS: '/me/vouchers',
@@ -121,6 +122,7 @@ export const API_ENDPOINTS = {
   VOUCHERS_LIST: '/vouchers',
   TICKET_DETAIL: (id: string) => `/staff/dashboard-stats/orders/${encodeURIComponent(id)}`,
   VERIFY_TICKET: '/staff/verify-ticket',
+  VERIFY_FOOD_ORDER: '/staff/verify-food-order',
 
   // STAFF SHIFTS
   STAFF_SHIFTS_ACTIVE: '/shifts/active',

@@ -44,6 +44,7 @@ const MAPPING = {
   'heart.fill': 'favorite',
   'gift.fill': 'card-giftcard',
   'newspaper.fill': 'article',
+  'trash.fill': 'delete',
 } as IconMapping;
 
 /**
