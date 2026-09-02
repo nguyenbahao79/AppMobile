@@ -14,7 +14,7 @@ const WHITE = '#f0f0ff';
 const MUTED = 'rgba(240,240,255,0.55)';
 const BORDER = 'rgba(255,255,255,0.1)';
 
-const POLL_INTERVAL_MS = 3000;
+const POLL_INTERVAL_MS = 2000;
 const LINK_LIFETIME_SEC = 300; // khớp expiredAt = now + 300s bên BE (PayOSService)
 
 const formatMoney = (value?: number) => `${Number(value || 0).toLocaleString('vi-VN')}đ`;
