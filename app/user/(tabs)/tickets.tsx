@@ -541,10 +541,10 @@ export default function TicketsScreen() {
   const activeLoading = isTicketTab ? loading : loadingOthers;
   const activeCount = isTicketTab ? tickets.length : activeTab === 'food' ? foodOrders.length : pointsLogs.length;
 
-  const TABS: { key: typeof activeTab; label: string; icon: React.ComponentProps<typeof Ionicons>['name']; count: number }[] = [
-    { key: 'ticket_online', label: 'Vé xem phim', icon: 'ticket-outline', count: tickets.length },
-    { key: 'food', label: 'Bắp nước', icon: 'fast-food-outline', count: foodOrders.length },
-    { key: 'points', label: 'Điểm', icon: 'star-outline', count: pointsLogs.length },
+  const TABS: { key: typeof activeTab; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
+    { key: 'ticket_online', label: 'Vé xem phim', icon: 'ticket-outline' },
+    { key: 'food', label: 'Bắp nước', icon: 'fast-food-outline' },
+    { key: 'points', label: 'Điểm', icon: 'star-outline' },
   ];
 
   return (
@@ -573,7 +573,7 @@ export default function TicketsScreen() {
             >
               <Ionicons name={t.icon} size={14} color={active ? '#0d0e28' : MUTED} />
               <Text style={[styles.tabBtnText, active && styles.tabBtnTextActive]} numberOfLines={1}>
-                {t.label}{t.count > 0 ? ` (${t.count})` : ''}
+                {t.label}
               </Text>
             </Pressable>
           );
