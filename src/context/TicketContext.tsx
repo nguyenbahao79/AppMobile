@@ -58,6 +58,8 @@ export type Transaction = {
   finalAmount?: number;
   pointsEarned?: number;
   createdAt?: string;
+  /** QR bắp nước của đơn — có khi đơn có món ăn kèm theo, kể cả khi đơn cũng có vé. */
+  receiptToken?: string;
 };
 
 function formatDate(value?: string) {

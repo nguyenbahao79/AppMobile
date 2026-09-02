@@ -8,7 +8,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTickets, Ticket, Transaction } from '@/context/TicketContext';
 import { apiClient } from '@/api/client';
-import { API_ENDPOINTS } from '@/api/config';
+import { API_ENDPOINTS, BASE_URL } from '@/api/config';
 
 /* ── Theme ── */
 const NAVY   = '#0d0e28';
@@ -177,11 +177,11 @@ const TX_STATUS_LABEL: Record<string, { label: string; color: string }> = {
   pending:   { label: 'Chờ xử lý', color: YELLOW },
 };
 
-function FoodOrderCard({ tx }: { tx: Transaction }) {
+function FoodOrderCard({ tx, onPress }: { tx: Transaction; onPress: () => void }) {
   const st = TX_STATUS_LABEL[tx.status || ''] || TX_STATUS_LABEL.pending;
   const items = tx.items || [];
   return (
-    <View style={txCard.root}>
+    <Pressable style={txCard.root} onPress={onPress}>
       <View style={txCard.iconWrap}>
         <Ionicons name="fast-food-outline" size={20} color={PINK} />
       </View>
@@ -197,7 +197,8 @@ function FoodOrderCard({ tx }: { tx: Transaction }) {
           <Text style={txCard.price}>{Number(tx.finalAmount || 0).toLocaleString('vi-VN')}đ</Text>
         </View>
       </View>
-    </View>
+      {tx.receiptToken ? <Ionicons name="qr-code-outline" size={18} color={MUTED} /> : null}
+    </Pressable>
   );
 }
 
@@ -451,12 +452,105 @@ const modal = StyleSheet.create({
   cancelBtnText: { fontSize: 15, fontWeight: '800', color: RED },
 });
 
+/* ── Food Order Detail Modal (QR bắp nước) ── */
+function FoodOrderDetailModal({
+  tx,
+  visible,
+  onClose,
+}: {
+  tx: Transaction | null;
+  visible: boolean;
+  onClose: () => void;
+}) {
+  const st = tx ? (TX_STATUS_LABEL[tx.status || ''] || TX_STATUS_LABEL.pending) : null;
+  const qrUrl = tx?.receiptToken ? `${BASE_URL}${API_ENDPOINTS.RECEIPT_QR(tx.receiptToken)}` : '';
+  const items = tx?.items || [];
+
+  return (
+    <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
+      <View style={modal.overlay}>
+        <SafeAreaView style={modal.sheet}>
+          <View style={modal.handle} />
+
+          <View style={modal.header}>
+            <View style={modal.headerLeft}>
+              <Ionicons name="fast-food" size={16} color={YELLOW} />
+              <Text style={modal.headerTitle}>CHI TIẾT ĐƠN BẮP NƯỚC</Text>
+            </View>
+            <Pressable onPress={onClose} hitSlop={12} style={modal.closeBtn}>
+              <Ionicons name="close" size={22} color={MUTED} />
+            </Pressable>
+          </View>
+
+          {tx && (
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={modal.scroll}>
+              <View style={modal.qrWrap}>
+                <View style={[modal.qrBox, !qrUrl && modal.qrBoxEmpty]}>
+                  {qrUrl ? (
+                    <Image source={{ uri: qrUrl }} style={modal.qrImg} resizeMode="contain" />
+                  ) : (
+                    <>
+                      <Ionicons name="qr-code-outline" size={60} color={DIM} />
+                      <Text style={modal.qrMissingText}>Đơn này chưa có mã QR</Text>
+                    </>
+                  )}
+                </View>
+
+                {st && (
+                  <View style={[modal.statusPill, { backgroundColor: st.color + '22', borderColor: st.color + '55' }]}>
+                    <Text style={[modal.statusPillText, { color: st.color }]}>{st.label}</Text>
+                  </View>
+                )}
+
+                <Text style={modal.ticketCode}>#{tx.orderCode || tx.id}</Text>
+                {!!qrUrl && <Text style={modal.qrNote}>QR bảo mật — được mã hóa bởi hệ thống</Text>}
+              </View>
+
+              <View style={modal.section}>
+                {items.map((item, idx) => (
+                  <View key={idx} style={foodModal.itemRow}>
+                    <Text style={foodModal.itemLabel} numberOfLines={1}>{item.label}{item.sub ? ` (${item.sub})` : ''}</Text>
+                    <Text style={foodModal.itemPrice}>{Number(item.price || 0).toLocaleString('vi-VN')}đ</Text>
+                  </View>
+                ))}
+
+                <View style={modal.divider} />
+
+                <View style={modal.priceRow}>
+                  <Text style={modal.priceLabel}>Tổng tiền</Text>
+                  <Text style={modal.priceValue}>{Number(tx.finalAmount || 0).toLocaleString('vi-VN')}đ</Text>
+                </View>
+                <View style={modal.priceRow}>
+                  <Text style={modal.priceLabel}>Ngày đặt</Text>
+                  <Text style={modal.priceSecondary}>{formatTxDate(tx.createdAt)}</Text>
+                </View>
+              </View>
+
+              <Text style={modal.note}>
+                Vui lòng xuất trình mã QR cho nhân viên tại quầy để nhận bắp nước. QR được mã hóa — không đọc được bằng mắt thường.
+              </Text>
+            </ScrollView>
+          )}
+        </SafeAreaView>
+      </View>
+    </Modal>
+  );
+}
+
+const foodModal = StyleSheet.create({
+  itemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 12 },
+  itemLabel: { flex: 1, fontSize: 13, color: WHITE, fontWeight: '600' },
+  itemPrice: { fontSize: 13, color: MUTED, fontWeight: '700' },
+});
+
 /* ══════════════════════ MAIN SCREEN ══════════════════════ */
 export default function TicketsScreen() {
   const { tickets, cancelTicket, fetchTickets, loading } = useTickets();
 
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [selectedFoodTx, setSelectedFoodTx] = useState<Transaction | null>(null);
+  const [foodModalVisible, setFoodModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   // Khớp web TransactionHistory.jsx: cùng 1 danh sách giao dịch có 3 loại (vé/bắp nước/điểm).
@@ -630,7 +724,9 @@ export default function TicketsScreen() {
         <FlatList
           data={foodOrders}
           keyExtractor={(item, i) => String(item.id ?? item.orderCode ?? i)}
-          renderItem={({ item }) => <FoodOrderCard tx={item} />}
+          renderItem={({ item }) => (
+            <FoodOrderCard tx={item} onPress={() => { setSelectedFoodTx(item); setFoodModalVisible(true); }} />
+          )}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
           onEndReached={handleOtherTxEndReached}
@@ -669,6 +765,11 @@ export default function TicketsScreen() {
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
         onCancel={handleCancel}
+      />
+      <FoodOrderDetailModal
+        tx={selectedFoodTx}
+        visible={foodModalVisible}
+        onClose={() => setFoodModalVisible(false)}
       />
     </SafeAreaView>
   );
